@@ -703,10 +703,14 @@ const noAds = (() =>
 	const list = {
 		allowUrlFull: new Set([]),
 
-		allowHostname: [
-			/:\/\/slickdeals\.net\//,
-			// /.*/,
-		],
+		/* Intentionally empty. A /:\/\/slickdeals\.net\// entry lived here, but
+		 * check() tests it against a bare hostname ("slickdeals.net"), which can
+		 * never contain "://" - so it never matched and first-party requests have
+		 * always been filtered like any other. Deleting it makes that explicit.
+		 * Repairing it instead would be a real loosening: allowHostname is checked
+		 * before every block list, so first-party URLs matching /click\./,
+		 * /analytic/, /adsystem/ and /\/ad-\// would start being allowed through. */
+		allowHostname: [],
 		allowUrl: [
 			/google\.com\/recaptcha\//,
 			/fonts\.googleapis\.com/,
