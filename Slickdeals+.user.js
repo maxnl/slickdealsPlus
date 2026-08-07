@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.11
+// @version      26.11.1
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.11";
-const CHANGES = `! changelog text overlapped the "more" link in the menu`;
+const VERSION = "26.11.1";
+const CHANGES = `! link resolving worked again - the id sent to the resolver had been changed and it no longer recognised it`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1865,10 +1865,15 @@ const processLinks = (node, force) =>
 		elLink.classList.add(processedMarker);
 		// const {id, type} = getUrlInfo(elLink.href) || {};
 		const urlObject = new URL(elLink.href);
+		/* Two keys, deliberately. `id` is what the resolver is addressed with and
+		 * what its response is XOR'd with, so it has to be the shape the service
+		 * recognises. `key` is ours: it is collision-free per link, which `id` is
+		 * not, and it is what the local cache and the link grouping use. */
 		const id = getUrlId(urlObject);
 		if (!id)
 			continue;
 
+		const key = getCacheKey(urlObject);
 		const queryObject = new URLSearchParams(urlObject.search);
 		if (!elLink._elHover)
 		{
@@ -1890,9 +1895,9 @@ const processLinks = (node, force) =>
 		 * remaining link - the same failure shape as the return-vs-continue bug.
 		 * Leftover from when u2 was extracted with a regex, which did hand back
 		 * the raw encoded value and so needed decoding. */
-		let url = queryObject.has("u2") ? queryObject.get("u2") : SETTINGS(id);
+		let url = queryObject.has("u2") ? queryObject.get("u2") : SETTINGS(key);
 
-		const aLinks = linksData[id] || [elLink];
+		const aLinks = linksData[key] || [elLink];
 		const isInited = aLinks.resolved !== undefined;
 		if (isInited)
 		{
@@ -1912,7 +1917,7 @@ const processLinks = (node, force) =>
 		else
 		{
 			aLinks.resolved = false;
-			linksData[id] = aLinks;
+			linksData[key] = aLinks;
 		}
 
 		// if (!elLink._hrefResolved)
@@ -1973,7 +1978,7 @@ const processLinks = (node, force) =>
 					if (!/^https?:\/\//.test(response))
 						return;
 
-					SETTINGS(id, response);
+					SETTINGS(key, response);
 					for(let i = 0; i < aLinks.length; i++)
 						linkUpdate(aLinks[i], response);
 
@@ -2111,13 +2116,6 @@ const getUrlId = (() =>
 {
 	const ids = ["pno", "sdtid", "tid", "pcoid", "lno"];
 	const count = ids.length;
-	/* Parameters that identify the visit, not the destination, and so must not
-	 * reach the cache key. Observed on the front page: adobeRef carries a
-	 * per-pageview prefix with a per-link counter, peid is a per-pageview uuid,
-	 * hash and auuid are session/user scoped, sdtrk names the originating page,
-	 * and u3 is an opaque blob that was already being dropped. */
-	const volatile = ["u3", "adobeRef", "peid", "hash", "auuid", "sdtrk"];
-	const volatileCount = volatile.length;
 	return urlObject =>
 	{
 		if (urlObject.hostname !== "slickdeals.net")
@@ -2132,46 +2130,59 @@ const getUrlId = (() =>
 			if (queryObject.has(key))
 				id += queryObject.get(key) + key;
 		}
-		/* None of the params above identify the destination. In forum threads `lno`
-		 * is the link index *within a post*, so it resets to 1 in every post: the
-		 * first link of every post in a thread collapses onto a single id
-		 * (e.g. "19842387sdtid1lno" shared by one rei.com and four
-		 * dickssportinggoods.com links). That id is the persistent localStorage
-		 * cache key, so they all inherit whichever link resolved first. `pno` is a
-		 * merchant/store page id and collides the same way across threads. Mix in a
-		 * hash of the whole request so the key is unique per actual link. */
-		/* Hashing the *whole* query made the key unique per link, which was the
-		 * point - but it also swept in parameters that describe the visit rather
-		 * than the destination, and those change on every page load. The id then
-		 * changed on every load too, so the cache could never hit and every link
-		 * on the page was re-sent to the resolver each time. Drop them first.
+		/* This value is not ours to choose. It is sent to the resolver as a path
+		 * segment and is the key the response is XOR'd with, and the service only
+		 * recognises ids in this exact shape - measured: the upstream id returns
+		 * 200 with a body, while a differently-derived id for the same link and
+		 * the same version returns 404 with error 7.122. Redefining it, as an
+		 * earlier change did to make it collision-free, silently broke every
+		 * resolution. Collision-freedom now lives in getCacheKey() instead.
 		 *
-		 * A denylist rather than an allowlist on purpose: over-stripping only
-		 * merges links that share a destination anyway, while an allowlist that
-		 * missed a distinguishing parameter would resurrect the original bug of
-		 * two different links sharing one cache entry. */
-		for (let i = 0; i < volatileCount; i++)
+		 * An empty id also means "nothing to resolve here", which is what keeps
+		 * ordinary navigation off the resolver. */
+		if (/^\d+lno$/.test(id) || id === "" && urlObject.pathname === "/click")
+		{
+			queryObject.delete("u3");
+			// prepend 0 if hex string used,
+			// otherwise it will be ignored.
+			id = 0 + crc32(queryObject.toString()) + "crc";
+		}
+		return id;
+	};
+})();
+
+/**
+ * Key under which a link's resolved destination is cached locally, and under
+ * which links sharing a destination are grouped.
+ *
+ * Deliberately separate from getUrlId(). The resolver id has to match what the
+ * service expects, and it collides: `lno` is the link index within a post, so
+ * it restarts at 1 in every post and the first link of every post in a thread
+ * shares one id. Using that as the cache key made links inherit whichever
+ * destination resolved first. This key is derived from the whole request, minus
+ * the parameters that describe the visit rather than the destination, so it is
+ * unique per link and stable across page loads.
+ * @function
+ * @param {URL} urlObject - The link to key.
+ * @returns {string} cache key, always starting with a digit
+ */
+const getCacheKey = (() =>
+{
+	/* adobeRef carries a per-pageview prefix with a per-link counter and peid is
+	 * a per-pageview uuid - both confirmed to change between two loads of the
+	 * same page. hash, auuid and sdtrk are session or page scoped. u3 is opaque.
+	 * A denylist, not an allowlist: over-stripping only merges links that share
+	 * a destination, while missing a distinguishing parameter would bring back
+	 * the collision this key exists to prevent. */
+	const volatile = ["u3", "adobeRef", "peid", "hash", "auuid", "sdtrk"];
+	const count = volatile.length;
+	return urlObject =>
+	{
+		const queryObject = new URLSearchParams(urlObject.search);
+		for (let i = 0; i < count; i++)
 			queryObject.delete(volatile[i]);
 
-		/* Only outbound links have anything to resolve. Upstream left `id` empty
-		 * for everything that was neither /click nor carrying a tracking param,
-		 * and an empty id means processLinks skips the link. Returning a hash
-		 * unconditionally lost that gate, so ordinary navigation - /newsearch.php,
-		 * /deal-alerts/, /giveaway/... - was sent to the resolver too, hundreds of
-		 * requests per page that can only ever come back 404. */
-		if (!id && urlObject.pathname !== "/click")
-			return false;
-
 		queryObject.sort();
-		/* The hash alone, with no separator and no parameter prefix. The prefix
-		 * was only ever descriptive - the resolver is given the full URL in the
-		 * request body - and joining it with "-" produced ids the service rejects:
-		 * its CORS preflight answers 404 for any id containing a hyphen, so the
-		 * browser never sent the request at all. Measured over one page load:
-		 * OPTIONS returned 200 for all 1122 ids without a hyphen and 404 for all
-		 * 13 with one. This shape is the one known to be accepted. */
-		// prepend 0 if hex string used,
-		// otherwise it will be ignored.
 		return 0 + crc32(urlObject.pathname + "?" + queryObject.toString()) + "crc";
 	};
 })();
