@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.8
+// @version      26.10.9
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.8";
-const CHANGES = `! menu text was invisible on the classic layout\n! loading counter overflowed the menu button`;
+const VERSION = "26.10.9";
+const CHANGES = `! links stopped resolving at all, and ordinary navigation links were being looked up too`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2153,11 +2153,26 @@ const getUrlId = (() =>
 		for (let i = 0; i < volatileCount; i++)
 			queryObject.delete(volatile[i]);
 
+		/* Only outbound links have anything to resolve. Upstream left `id` empty
+		 * for everything that was neither /click nor carrying a tracking param,
+		 * and an empty id means processLinks skips the link. Returning a hash
+		 * unconditionally lost that gate, so ordinary navigation - /newsearch.php,
+		 * /deal-alerts/, /giveaway/... - was sent to the resolver too, hundreds of
+		 * requests per page that can only ever come back 404. */
+		if (!id && urlObject.pathname !== "/click")
+			return false;
+
 		queryObject.sort();
+		/* The hash alone, with no separator and no parameter prefix. The prefix
+		 * was only ever descriptive - the resolver is given the full URL in the
+		 * request body - and joining it with "-" produced ids the service rejects:
+		 * its CORS preflight answers 404 for any id containing a hyphen, so the
+		 * browser never sent the request at all. Measured over one page load:
+		 * OPTIONS returned 200 for all 1122 ids without a hyphen and 404 for all
+		 * 13 with one. This shape is the one known to be accepted. */
 		// prepend 0 if hex string used,
 		// otherwise it will be ignored.
-		const hash = 0 + crc32(urlObject.pathname + "?" + queryObject.toString()) + "crc";
-		return id ? id + "-" + hash : hash;
+		return 0 + crc32(urlObject.pathname + "?" + queryObject.toString()) + "crc";
 	};
 })();
 /**
