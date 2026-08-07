@@ -1,5 +1,7 @@
 # Slickdeals+
 
+[![version](https://img.shields.io/github/v/release/maxnl/slickdealsPlus?label=version&sort=semver)](https://github.com/maxnl/slickdealsPlus/releases/latest)
+
 *Have you ever looked in DevTools while browsing slickdeals.net?*
 
 *It's mind-boggling how much useless (to the visitor) stuff it downloads, __uploads__ to other servers and stores on your computer*
