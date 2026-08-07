@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.10
+// @version      26.10.11
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.10";
-const CHANGES = `! opening the menu grew the top bar and displaced the avatar`;
+const VERSION = "26.10.11";
+const CHANGES = `! changelog text overlapped the "more" link in the menu`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3447,21 +3447,25 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
    one ID, which is why the labels stayed bold and haloed. An !important author
    declaration wins regardless of specificity, and unlike an #top_userbar prefix
    it keeps working if the host is ever mounted somewhere else. */
-.sdp-fallbackHost .sdp-menu > ul li,
-.sdp-fallbackHost .sdp-menu > ul a,
-.sdp-fallbackHost .sdp-menu > ul span,
-.sdp-fallbackHost .sdp-menu > ul div,
-.sdp-fallbackHost .sdp-menu > ul label,
-.sdp-fallbackHost .sdp-menu > ul input,
-.sdp-fallbackHost .sdp-menu > ul textarea
+/* Every descendant, not an enumerated list of tags, and every inheritable text
+   property, not only the ones already known to break. The panel is injected
+   into page markup whose CSS we do not control and inherits from it: three
+   separate bugs here came from exactly that route - weight, then shadow, then
+   colour - each found only after it shipped. Resetting the category costs one
+   rule and ends the sequence. The ul itself is excluded deliberately, since it
+   is what supplies the colour these inherit. */
+.sdp-fallbackHost .sdp-menu > ul *
 {
 	/* colour has to come with them. The bar styles its links white for a dark
 	   background; removing the text-shadow without also reclaiming colour left
 	   white text on the white panel - invisible, and the page's :hover turned it
 	   yellow. inherit takes the panel's own colour, so dark mode follows too. */
 	color: inherit !important;
+	font-style: normal !important;
 	font-weight: normal !important;
+	letter-spacing: normal !important;
 	text-shadow: none !important;
+	text-transform: none !important;
 }
 
 .sdp-fallbackHost .sdp-menu:focus-within > ul
@@ -3496,6 +3500,32 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
 .sdp-fallbackHost .changes > *
 {
 	color: #444;
+}
+
+/* The changelog is laid out for Blueprint's wider dropdown. In this panel the
+   entries wrap, and .changesLink is position:absolute so it left the flow and
+   landed on top of the wrapped text. Keep it in the flow, and give the entries
+   room for a hanging marker so a wrapped second line lines up under the first
+   instead of under the "!". */
+.sdp-fallbackHost .changes
+{
+	margin: 0.4em 0 0;
+	line-height: 1.45;
+}
+
+.sdp-fallbackHost .changes > div
+{
+	padding-left: 1.2em;
+	margin-bottom: 0.35em;
+	text-indent: 0;
+}
+
+.sdp-fallbackHost .changesLink
+{
+	position: static;
+	display: block;
+	margin-top: 0.4em;
+	text-align: right;
 }
 
 body.darkMode .sdp-fallbackHost .sdp-menu > ul
