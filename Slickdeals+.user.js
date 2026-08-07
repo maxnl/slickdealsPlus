@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.3
+// @version      26.10.4
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.3";
-const CHANGES = `! link cache never matched, so every link was looked up again on every page load`;
+const VERSION = "26.10.4";
+const CHANGES = `! menu could fail to appear if the page header was still rendering`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1053,9 +1053,26 @@ const initMenu = elNav =>
 	if (initMenu._inited)
 		return;
 
-	initMenu._inited = true;
+	/* _inited used to be set before this check, so the retry scheduled below hit
+	 * the guard above and returned immediately: the "wait for the header to
+	 * finish rendering" path never retried even once, and a nav that was not yet
+	 * populated simply never got a menu. Claim _inited only when actually
+	 * building. _pending stops the MutationObserver, which fires repeatedly
+	 * during render, from stacking a timer per call. */
 	if (elNav.children.length < 4 && --initMenu.counter)
-		return setTimeout(() => initMenu(elNav), 0);
+	{
+		if (!initMenu._pending)
+		{
+			initMenu._pending = true;
+			setTimeout(() =>
+			{
+				initMenu._pending = false;
+				initMenu(elNav);
+			}, 0);
+		}
+		return;
+	}
+	initMenu._inited = true;
 
 	/**
 	 * Creates a menu item for a user setting.
