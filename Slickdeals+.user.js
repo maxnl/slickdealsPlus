@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.2
+// @version      26.10.3
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.2";
-const CHANGES = `* link cache is now capped, so it cannot grow until browser storage runs out`;
+const VERSION = "26.10.3";
+const CHANGES = `! link cache never matched, so every link was looked up again on every page load`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2067,6 +2067,13 @@ const getUrlId = (() =>
 {
 	const ids = ["pno", "sdtid", "tid", "pcoid", "lno"];
 	const count = ids.length;
+	/* Parameters that identify the visit, not the destination, and so must not
+	 * reach the cache key. Observed on the front page: adobeRef carries a
+	 * per-pageview prefix with a per-link counter, peid is a per-pageview uuid,
+	 * hash and auuid are session/user scoped, sdtrk names the originating page,
+	 * and u3 is an opaque blob that was already being dropped. */
+	const volatile = ["u3", "adobeRef", "peid", "hash", "auuid", "sdtrk"];
+	const volatileCount = volatile.length;
 	return urlObject =>
 	{
 		if (urlObject.hostname !== "slickdeals.net")
@@ -2089,7 +2096,19 @@ const getUrlId = (() =>
 		 * cache key, so they all inherit whichever link resolved first. `pno` is a
 		 * merchant/store page id and collides the same way across threads. Mix in a
 		 * hash of the whole request so the key is unique per actual link. */
-		queryObject.delete("u3");
+		/* Hashing the *whole* query made the key unique per link, which was the
+		 * point - but it also swept in parameters that describe the visit rather
+		 * than the destination, and those change on every page load. The id then
+		 * changed on every load too, so the cache could never hit and every link
+		 * on the page was re-sent to the resolver each time. Drop them first.
+		 *
+		 * A denylist rather than an allowlist on purpose: over-stripping only
+		 * merges links that share a destination anyway, while an allowlist that
+		 * missed a distinguishing parameter would resurrect the original bug of
+		 * two different links sharing one cache entry. */
+		for (let i = 0; i < volatileCount; i++)
+			queryObject.delete(volatile[i]);
+
 		queryObject.sort();
 		// prepend 0 if hex string used,
 		// otherwise it will be ignored.
