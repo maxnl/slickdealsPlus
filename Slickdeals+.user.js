@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.5
+// @version      26.10.6
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.5";
-const CHANGES = `! memory use grew on pages that keep loading more deals`;
+const VERSION = "26.10.6";
+const CHANGES = `! menu text still rendered bold and outlined on the classic layout`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3379,6 +3379,12 @@ html[data-loading] .sdp-fallbackHost .sdp-menu > div[role="button"]
    panel lives inside that bar, so it inherited both - the halo that made the
    labels hard to read. The page's own selectors out-specify a bare inherited
    value, so reset explicitly on the elements that carry text. */
+/* !important, not more selectors. The panel is mounted inside #top_userbar, so
+   the page styles its text through an ID selector - specificity (1,0,1). The
+   plain version of this rule is (0,3,1): three classes and a type still lose to
+   one ID, which is why the labels stayed bold and haloed. An !important author
+   declaration wins regardless of specificity, and unlike an #top_userbar prefix
+   it keeps working if the host is ever mounted somewhere else. */
 .sdp-fallbackHost .sdp-menu > ul li,
 .sdp-fallbackHost .sdp-menu > ul a,
 .sdp-fallbackHost .sdp-menu > ul span,
@@ -3387,8 +3393,8 @@ html[data-loading] .sdp-fallbackHost .sdp-menu > div[role="button"]
 .sdp-fallbackHost .sdp-menu > ul input,
 .sdp-fallbackHost .sdp-menu > ul textarea
 {
-	font-weight: normal;
-	text-shadow: none;
+	font-weight: normal !important;
+	text-shadow: none !important;
 }
 
 .sdp-fallbackHost .sdp-menu:focus-within > ul
