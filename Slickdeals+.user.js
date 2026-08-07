@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.4
+// @version      26.10.5
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.4";
-const CHANGES = `! menu could fail to appear if the page header was still rendering`;
+const VERSION = "26.10.5";
+const CHANGES = `! memory use grew on pages that keep loading more deals`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1889,6 +1889,16 @@ const processLinks = (node, force) =>
 		const isInited = aLinks.resolved !== undefined;
 		if (isInited)
 		{
+			/* Drop links that have left the document. Nothing else ever removed
+			 * entries here, so every anchor the script had seen stayed referenced
+			 * for the life of the page - detached nodes included, kept alive by
+			 * this array alone - and updateLinks() walked all of them. Infinite
+			 * scroll and in-page navigation replace cards constantly. */
+			for (let n = aLinks.length - 1; n >= 0; n--)
+			{
+				if (!aLinks[n].isConnected)
+					aLinks.splice(n, 1);
+			}
 			if (!aLinks.includes(elLink))
 				aLinks.push(elLink);
 		}
@@ -2055,10 +2065,20 @@ const updateLinks = () =>
 	for(const id in linksData)
 	{
 		const aLinks = linksData[id];
-		for(let i = 0; i < aLinks.length; i++)
+		//iterate backwards so pruning does not skip the next entry
+		for(let i = aLinks.length - 1; i >= 0; i--)
 		{
-			linkUpdate(aLinks[i], undefined, true);
+			if (aLinks[i].isConnected)
+				linkUpdate(aLinks[i], undefined, true);
+			else
+				aLinks.splice(i, 1);
 		}
+		/* Only once the id has finished resolving: an in-flight request still
+		 * holds this array in its closure, and re-creating it underneath would
+		 * split the group in two. The destination itself survives in the cache,
+		 * so a later link with this id just re-reads it. */
+		if (aLinks.length === 0 && aLinks.resolved)
+			delete linksData[id];
 	}
 };
 
