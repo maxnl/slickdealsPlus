@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.9.1
+// @version      26.9.2
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.9.1";
+const VERSION = "26.9.2";
 const CHANGES = `+ settings menu now reachable on the classic layout\n# find it in the top bar, left of your username`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
@@ -371,14 +371,19 @@ const SETTINGS = (() =>
 		}
 		catch
 		{
+			/* The inner do…while here ran the iterator to exhaustion and then
+			 * deleted `undefined`, so every pass freed exactly nothing and the
+			 * handler recursed up to 10,000 times against an unchanged cache. */
+			if (links.size === 0)
+				return; //nothing of ours left to free; the quota failure is not ours to fix
+
 			//removing in batches exponentially
-			for(let i = 0, key, keys = links.keys(), count = ++attempt ** 2; i < count; i++)
+			for(let i = 0, keys = links.keys(), count = ++attempt ** 2; i < count; i++)
 			{
-				do
-				{
-					key = keys.next().value;
-				}
-				while(key);
+				//Map.keys() yields insertion order, so this evicts oldest-first
+				const key = keys.next().value;
+				if (key === undefined)
+					break;
 
 				links.delete(key);
 			}
