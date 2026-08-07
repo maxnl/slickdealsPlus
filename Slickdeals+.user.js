@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.6
+// @version      26.10.7
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.6";
-const CHANGES = `! menu text still rendered bold and outlined on the classic layout`;
+const VERSION = "26.10.7";
+const CHANGES = `! score, free and price-difference highlighting did nothing on the classic layout`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1761,11 +1761,16 @@ const processCards = (node, force) =>
 		const priceFree = price && price.match(rePriceFree) || priceNew === 0;
 		const priceDifference = priceBase - priceNew;
 		const priceDealPercent = Math.round(priceDifference * 100 / priceBase);
+		/* div.dealitem is the classic layout's card. Nothing here matched it, and
+		 * its ancestors are div/td/tr with no li anywhere, so closest("li") missed
+		 * too - which left elCard null and silently disabled the free and
+		 * price-difference highlighting on those pages, not just the score. */
 		const elCard = elParent.closest(
 			"li," +
 			"div[data-type='fpdeal']," +
 			"div.resultRow," +
-			"div[data-role='frontpageDealContent']"
+			"div[data-role='frontpageDealContent']," +
+			"div.dealitem"
 		);
 
 		if (!Number.isNaN(priceDealPercent))
@@ -1808,7 +1813,8 @@ const highlightCards = node =>
 						"li.carousel__slide," + // front page carousel
 						"li.categoryPageDealGrid__feedItem," + // https://slickdeals.net/deals/
 						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
-						"div.resultRow" //search result
+						"div.resultRow," + //search result
+						"div.dealitem" //classic layout, both #deal_list and #deal_list_featured
 		, node, true);
 
 	if (nlItems.length === 0)
@@ -1822,7 +1828,8 @@ const highlightCards = node =>
 			".dealCardSocialControls__voteCount," + //front page
 			".bp-p-votingThumbsPopup_voteCount," + // https://slickdeals.net/deals/watches/
 			".ratingCol.stats>.num," + //search result
-			".ratingCol>.ratingNum" //search result
+			".ratingCol>.ratingNum," + //search result
+			".fp_votebar>.rating" //classic layout, renders as "+75"
 		);
 		if (elVotes && elVotes.textContent !== "")
 		{
@@ -2264,6 +2271,11 @@ const init = () =>
 		processCards(elPageContent);
 		processLinks(elPageContent);
 	}
+	/* Score highlighting otherwise only runs from processCards(), i.e. only for
+	 * cards whose price element was recognised. On the classic layout the vote
+	 * count is readable even when the price markup is not, so drive it once
+	 * directly rather than making it a hostage of price parsing. */
+	highlightCards();
 	customCSS();
 	setColors();
 	debug(GM_info.script.name, "v" + VERSION, "initialized");
