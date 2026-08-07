@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.1
+// @version      26.10.2
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.1";
-const CHANGES = `+ Unwrap tracking links: uses the destination already in the link, without contacting the resolver\n# separate from Resolve links, so you can keep one without the other`;
+const VERSION = "26.10.2";
+const CHANGES = `* link cache is now capped, so it cannot grow until browser storage runs out`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -36,6 +36,22 @@ const SETTINGS = (() =>
 {
 	const LocalStorageName = "slickdeals+";
 	const LocalStorageNameLinks = LocalStorageName + "links";
+	/* Upper bound on cached link resolutions. The cache had no TTL and no cap, so
+	 * it grew until a quota failure forced eviction - and that path was broken
+	 * until recently. Capping on write is cheaper and more predictable than
+	 * relying on the failure path at all.
+	 *
+	 * Sizing: entries observed around 100-150 characters, and browsers account
+	 * localStorage in UTF-16 code units, so budget ~2 bytes per character - about
+	 * 900KB at this cap, against a typical 5MB origin quota shared with the
+	 * settings blob and whatever slickdeals.net itself stores. An organically
+	 * grown cache reached 566 entries, so this is generous.
+	 *
+	 * Eviction is FIFO, not LRU: Map preserves insertion order and re-setting an
+	 * existing key does not move it, so this drops first-seen rather than
+	 * least-recently-used. True LRU would cost a delete+set on every cache read,
+	 * which is not worth it for destinations that rarely change. */
+	const LINKS_MAX = 3000;
 	// upgrade from v1.12
 	const oldData = localStorage.getItem("linksCache");
 	if (oldData)
@@ -170,6 +186,10 @@ const SETTINGS = (() =>
 			if (isLink.test(i))
 				links.set(i, data[i]);
 		}
+		/* An existing cache can already be over the cap, and trimming only on
+		 * write would leave it oversized until something new resolves. */
+		while (links.size > LINKS_MAX)
+			links.delete(links.keys().next().value);
 	}
 	catch{}
 	/**
@@ -428,6 +448,10 @@ const SETTINGS = (() =>
 			return storageData.get(id);
 
 		storageData.set(id, value);
+		//trim oldest-first so the cache cannot grow past the cap
+		while (storageData === links && links.size > LINKS_MAX)
+			links.delete(links.keys().next().value);
+
 		if (defaultSettings[id]?.onChange instanceof Function)
 			defaultSettings[id].onChange(value);
 
