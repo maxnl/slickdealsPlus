@@ -1,0 +1,61 @@
+name: Release on version bump
+
+# Runs on every push to master rather than filtering by path: if a release for
+# the current @version already exists the job is a no-op, so this is
+# self-healing and cannot miss a bump that landed in an unexpected way.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and check it is self-consistent
+        id: read
+        run: |
+          header=$(grep -m1 '^// @version' 'Slickdeals+.user.js' | awk '{print $3}')
+          const=$(grep -m1 '^const VERSION' 'Slickdeals+.user.js' | sed 's/.*"\(.*\)".*/\1/')
+          if [ -z "$header" ]; then echo "::error::no @version found"; exit 1; fi
+          # These two must agree: VERSION is sent to the link resolver as a path
+          # segment and shown in the menu footer, so a mismatch ships a script
+          # whose advertised version is not the one it reports.
+          if [ "$header" != "$const" ]; then
+            echo "::error::@version ($header) does not match VERSION ($const)"; exit 1
+          fi
+          echo "version=$header" >> "$GITHUB_OUTPUT"
+
+      - name: Syntax check
+        run: node --check 'Slickdeals+.user.js'
+
+      - name: Create release if this version has none
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION already released - nothing to do"; exit 0
+          fi
+          notes=$(node -e '
+            const fs = require("fs");
+            const src = fs.readFileSync("Slickdeals+.user.js", "utf8");
+            const m = src.match(/const CHANGES = `([\s\S]*?)`;/);
+            const kind = {"!": "Fixed", "*": "Changed", "+": "Added", "-": "Removed", "?": "Help"};
+            const lines = (m ? m[1] : "").split(/\\n|\n/).map(l => l.trim()).filter(Boolean);
+            console.log(lines.map(l => {
+              const c = l[0];
+              const text = (kind[c] || c === "#" ? l.slice(1) : l).trim();
+              return kind[c] ? `- **${kind[c]}:** ${text}` : c === "#" ? `  ${text}` : `- ${text}`;
+            }).join("\n") || "No changelog entries.");
+          ')
+          printf '%s\n\n---\n\n[Install this version](%s)\n' \
+            "$notes" \
+            "https://github.com/${GITHUB_REPOSITORY}/raw/v$VERSION/Slickdeals%2B.user.js" > notes.md
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md
+          echo "Released v$VERSION"
