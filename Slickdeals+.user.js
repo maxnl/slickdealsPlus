@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.9.4
+// @version      26.9.5
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.9.4";
-const CHANGES = `+ Debug option is now visible in this menu\n! errors in the ad filter and link resolver were swallowed silently`;
+const VERSION = "26.9.5";
+const CHANGES = `! links whose destination contained a % were mangled, and could stop the rest of the page's links being processed`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
