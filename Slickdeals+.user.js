@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.9.6
+// @version      26.10.1
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.9.6";
-const CHANGES = `! menu text was bold and outlined, and the loading counter sat on top of the arrow`;
+const VERSION = "26.10.1";
+const CHANGES = `+ Unwrap tracking links: uses the destination already in the link, without contacting the resolver\n# separate from Resolve links, so you can keep one without the other`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -65,10 +65,16 @@ const SETTINGS = (() =>
 			name: "Hide Side Column",
 			description: "Hide side column on main page (popular, trending deals, etc)",
 		},
-		resolveLinks: { /* use resolved links by default*/
+		unwrapLinks: { /* use the destination already present in the link */
+			default: 1,
+			name: "Unwrap tracking links",
+			description: "Use the destination the link already contains\n* stays on your device, nothing is sent anywhere",
+			onChange: () => updateLinks()
+		},
+		resolveLinks: { /* ask the 3rd party service for destinations not in the link */
 			default: 1,
 			name: "Resolve links",
-			description: "Use resolved links\n* link and page url will be sent to 3nd party service",
+			description: "Look up destinations that aren't in the link\n* link and page url will be sent to 3nd party service",
 			onChange: () => updateLinks()
 		},
 		noAds: { /* remove ads */
@@ -1287,6 +1293,7 @@ const initMenu = elNav =>
 	const elFreeOnly = createMenuItem("freeOnly");
 	elFreeOnly.append(createMenuItem("colorFreeBG"));
 	elUl.append(elFreeOnly);
+	elUl.append(createMenuItem("unwrapLinks"));
 	const elMenuItem = createMenuItem("resolveLinks");
 	if (loading)
 	{
@@ -1859,6 +1866,12 @@ const processLinks = (node, force) =>
 			if (Array.isArray(url))
 				url = url[0];
 
+			/* Record where this destination came from, so the two settings can
+			 * govern their own path. A u2 value is read straight out of the link
+			 * and costs nothing; anything else came from the resolver, either just
+			 * now or from the cache - only resolver responses are ever written to
+			 * it, so the distinction stays clean. */
+			elLink._hrefLocal = queryObject.has("u2");
 			aLinks.resolved = true;
 			linkUpdate(elLink, url, force);
 			continue;
@@ -1954,7 +1967,11 @@ const linkUpdate = (elA, url, update) =>
 
 	elA.classList.toggle("notResolved", !elA._hrefResolved);
 	const elHover = elA.querySelector("a.overlayUrl");
-	if (SETTINGS.resolveLinks && elA._hrefResolved)
+	/* Destinations read out of the link itself are governed by unwrapLinks;
+	 * destinations obtained from the third-party service by resolveLinks. Keeping
+	 * them separate is the point: unwrapping is free and private, resolving is
+	 * neither, and previously one switch turned off both. */
+	if ((elA._hrefLocal ? SETTINGS.unwrapLinks : SETTINGS.resolveLinks) && elA._hrefResolved)
 	{
 		if (elHover)
 		{
