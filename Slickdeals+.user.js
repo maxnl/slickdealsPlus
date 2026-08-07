@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.8.8
+// @version      26.8.9
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -19,9 +19,9 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.8.8";
-const CHANGES = `+ one-click install and automatic updates straight from GitHub
-! tracking images injected as markup were never checked by the ad filter`;
+const VERSION = "26.8.9";
+const CHANGES = `! "more" link in this changelog pointed at the upstream project
+! debug setting was lost when upgrading from a pre-1.18.3 install`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -201,7 +201,10 @@ const SETTINGS = (() =>
 		//show debug option only if it was manually enabled in previous version
 		if (compareVersion(previousVersion, "1.18.3") < 0)
 		{
-			settings.debug = settings.debug ? 1 : 2;
+			/* `settings` is a Map: `settings.debug = …` set an own property that
+			 * nothing ever reads, so this upgrade silently did nothing. Every
+			 * other branch in this block already uses get/set. */
+			settings.set("debug", settings.get("debug") ? 1 : 2);
 		}
 		if (compareVersion(previousVersion, "1.15") < 0 && settings.has("resolvedClick"))
 		{
@@ -1341,7 +1344,7 @@ const initMenu = elNav =>
 
 	const elChangesLink = document.createElement("a");
 	elChangesLink.className = "changesLink";
-	elChangesLink.href = "https://vanowm.github.io/slickdealsPlus/CHANGES.html";
+	elChangesLink.href = "https://github.com/maxnl/slickdealsPlus/commits/master";
 	elChangesLink.target = "_blank";
 	elChangesLink.textContent = "more";
 
