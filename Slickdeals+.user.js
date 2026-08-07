@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.7
+// @version      26.10.8
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.7";
-const CHANGES = `! score, free and price-difference highlighting did nothing on the classic layout`;
+const VERSION = "26.10.8";
+const CHANGES = `! menu text was invisible on the classic layout\n! loading counter overflowed the menu button`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3343,7 +3343,28 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
    count sat on top of the caret. Reserve that corner for it. */
 html[data-loading] .sdp-fallbackHost .sdp-menu > div[role="button"]
 {
-	padding-right: 2.6em;
+	padding-right: 3.9em;
+}
+
+/* The shared rule pins this to width:1em and parks it on top of the hourglass.
+   That is fine for the single-digit tail of the countdown, but the front page
+   starts near a thousand links and a four-digit count overflowed the button.
+   Size it to its content and sit it beside the hourglass rather than over it. */
+html[data-loading] .sdp-fallbackHost .sdp-menu::after
+{
+	top: 50%;
+	right: 1.3em;
+	width: auto;
+	transform: translateY(-50%);
+	line-height: 1;
+	text-align: right;
+}
+
+html[data-loading] .sdp-fallbackHost .sdp-menu::before
+{
+	top: 50%;
+	line-height: 1;
+	transform: translateY(-50%);
 }
 
 .sdp-fallbackHost .sdp-menu > div[role="button"]:hover
@@ -3405,6 +3426,11 @@ html[data-loading] .sdp-fallbackHost .sdp-menu > div[role="button"]
 .sdp-fallbackHost .sdp-menu > ul input,
 .sdp-fallbackHost .sdp-menu > ul textarea
 {
+	/* colour has to come with them. The bar styles its links white for a dark
+	   background; removing the text-shadow without also reclaiming colour left
+	   white text on the white panel - invisible, and the page's :hover turned it
+	   yellow. inherit takes the panel's own colour, so dark mode follows too. */
+	color: inherit !important;
 	font-weight: normal !important;
 	text-shadow: none !important;
 }
