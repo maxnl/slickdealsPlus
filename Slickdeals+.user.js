@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         Slickdeals+
+// @author       maxnl (fork of Slickdeals+ by V@no)
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.8.9
+// @version      26.8.10
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -19,9 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.8.9";
-const CHANGES = `! "more" link in this changelog pointed at the upstream project
-! debug setting was lost when upgrading from a pre-1.18.3 install`;
+const VERSION = "26.8.10";
+const CHANGES = `+ author shown in the userscript manager`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
