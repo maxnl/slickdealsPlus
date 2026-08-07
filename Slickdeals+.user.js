@@ -3,8 +3,12 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.8.7
+// @version      26.8.8
 // @license      MIT
+// @homepageURL  https://github.com/maxnl/slickdealsPlus
+// @supportURL   https://github.com/maxnl/slickdealsPlus/issues
+// @downloadURL  https://raw.githubusercontent.com/maxnl/slickdealsPlus/master/Slickdeals%2B.user.js
+// @updateURL    https://raw.githubusercontent.com/maxnl/slickdealsPlus/master/Slickdeals%2B.user.js
 // @run-at       document-start
 // @inject-into  auto
 // @grant        none
@@ -15,10 +19,9 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.8.7";
-const CHANGES = `! Quick View not expanding on old front page (ad filter dropped the deal HTML)
-! forum links in later posts resolving to an earlier link's destination
-! link processing aborting early when two links shared a cache id`;
+const VERSION = "26.8.8";
+const CHANGES = `+ one-click install and automatic updates straight from GitHub
+! tracking images injected as markup were never checked by the ad filter`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
