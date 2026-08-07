@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      25.7.18
+// @version      26.8.7
 // @license      MIT
 // @run-at       document-start
 // @inject-into  auto
@@ -15,9 +15,10 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "25.7.18";
-const CHANGES = `! side layout with hidden side column
-! black text on dark background in changes log from menu`;
+const VERSION = "26.8.7";
+const CHANGES = `! Quick View not expanding on old front page (ad filter dropped the deal HTML)
+! forum links in later posts resolving to an earlier link's destination
+! link processing aborting early when two links shared a cache id`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -573,7 +574,17 @@ const noAds = (() =>
 				{
 					const _isNoAds = isNoAds && !this.closest(".dealCard");
 					const isSource = name === "src";
-					const blocked = _isNoAds ? isAds(isSource ? value : undefined, isSource ? undefined : value) : false;
+					/* blockText patterns are meant for script/iframe payloads. Applying them to
+					 * every innerHTML/outerHTML assignment silently drops legitimate markup:
+					 * the old front page's Quick View HTML (/ajax/getDeal.php, inserted via
+					 * jQuery .after() -> buildFragment -> innerHTML) carries
+					 * facebook_url="...utm_source=facebook" on the vote widget, which matches
+					 * /facebook/ and kills the whole insertion with no error, so deals never
+					 * expand. Only run the text filter on markup that can actually execute. */
+					const skipCheck = !isSource
+						&& typeof value === "string"
+						&& !/<\s*(?:script|iframe)\b/i.test(value);
+					const blocked = _isNoAds && !skipCheck ? isAds(isSource ? value : undefined, isSource ? undefined : value) : false;
 					if (blocked)
 					{
 						debug(debugPrefix + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name,
@@ -1714,12 +1725,14 @@ const processLinks = (node, force) =>
 			linkUpdate(elLink, url, force);
 			continue;
 		}
+		/* `return` here aborted the whole loop, so as soon as two links on a page
+		 * shared an id every remaining link went unprocessed. */
 		if (isInited && !force)
-			return;
+			continue;
 
 		elLink.classList.add("notResolved");
 		if (!SETTINGS.resolveLinks)
-			return;
+			continue;
 
 		if (datasets.loading === undefined)
 			datasets.loading = 0;
@@ -1874,14 +1887,20 @@ const getUrlId = (() =>
 			if (queryObject.has(key))
 				id += queryObject.get(key) + key;
 		}
-		if (/^\d+lno$/.test(id) || id === "" && urlObject.pathname === "/click")
-		{
-			queryObject.delete("u3");
-			// prepend 0 if hex string used,
-			// otherwise it will be ignored.
-			id = 0 + crc32(queryObject.toString()) + "crc";
-		}
-		return id;
+		/* None of the params above identify the destination. In forum threads `lno`
+		 * is the link index *within a post*, so it resets to 1 in every post: the
+		 * first link of every post in a thread collapses onto a single id
+		 * (e.g. "19842387sdtid1lno" shared by one rei.com and four
+		 * dickssportinggoods.com links). That id is the persistent localStorage
+		 * cache key, so they all inherit whichever link resolved first. `pno` is a
+		 * merchant/store page id and collides the same way across threads. Mix in a
+		 * hash of the whole request so the key is unique per actual link. */
+		queryObject.delete("u3");
+		queryObject.sort();
+		// prepend 0 if hex string used,
+		// otherwise it will be ignored.
+		const hash = 0 + crc32(urlObject.pathname + "?" + queryObject.toString()) + "crc";
+		return id ? id + "-" + hash : hash;
 	};
 })();
 /**
