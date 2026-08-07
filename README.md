@@ -26,6 +26,4 @@ Requires a userscript manager — [Tampermonkey](https://www.tampermonkey.net/) 
 
 With a userscript manager installed, that link opens Tampermonkey's install prompt directly. The script declares `@updateURL`, so Tampermonkey checks this repository for new versions from then on and updates itself — no need to revisit this page.
 
-> Installing from the `master` branch means you track the latest commit. GitHub's raw endpoint is CDN-cached for a few minutes, so a brand-new version may take a moment to appear.
-
-[Changes](https://vanowm.github.io/slickdealsPlus/CHANGES.html) (upstream changelog)
+[Changes](https://github.com/maxnl/slickdealsPlus/commits/master)
