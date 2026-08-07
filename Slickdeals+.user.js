@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.8.10
+// @version      26.9.1
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.8.10";
-const CHANGES = `+ author shown in the userscript manager`;
+const VERSION = "26.9.1";
+const CHANGES = `+ settings menu now reachable on the classic layout\n# find it in the top bar, left of your username`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1454,9 +1454,88 @@ const setColors = (ids =>
 	});
 })(["colorFreeBG", "colorRatingBG", "colorDiffBG"]);
 
-const elMenu = document.querySelector(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
-if (elMenu)
-	initMenu(elMenu);
+/**
+ * Builds a host with the DOM shape initMenu() expects, for the classic layout
+ * (/, /deals/, /f/*, /coupons/, /blog/, /newsearch.php), which has no Blueprint
+ * header to clone from. Lets initMenu() run unmodified.
+ *
+ * Three constraints, all load-bearing:
+ * - at least 4 children. initMenu() sets _inited before testing
+ *   `children.length < 4`, so its deferred retry returns immediately and a
+ *   smaller host would never build a menu at all.
+ * - a <header> ancestor. initMenu() does elNav.closest("header") and calls
+ *   .after() on it; closest() matches self, so the host is the header.
+ * - data-v-1, not a friendlier name. fixCSS() resolves the script's own
+ *   [data-v-ID] selectors by matching dataset keys against /^v([A-F]|-\d)/,
+ *   and "v-1" is the shape that satisfies it.
+ * @returns {HTMLElement} the element to hand to initMenu()
+ */
+const createFallbackMenuHost = () =>
+{
+	const elHost = document.createElement("header");
+	elHost.className = "sdp-fallbackHost";
+	elHost.innerHTML = "<span></span><span></span><span></span>"
+		+ "<div class=\"slickdealsHeader__dropdown\" data-v-1=\"\">"
+		+ "<div role=\"button\" tabindex=\"0\">"
+		+ "<p>Slickdeals+</p>"
+		+ "<span class=\"slickdealsHeader__navItemText\" data-v-1=\"\"></span>"
+		+ "</div>"
+		+ "<ul data-v-1=\"\"><li class=\"slickdealsHeaderDropdownItem\"><a data-v-1=\"\"></a></li></ul>"
+		+ "</div>";
+
+	return elHost;
+};
+
+/**
+ * Mounts the settings menu, preferring the Blueprint header and falling back to
+ * the classic top bar. On the classic layout the button is placed immediately
+ * left of the avatar/username cluster.
+ * @returns {void}
+ */
+const mountMenu = () =>
+{
+	if (initMenu.elMenu)
+		return;
+
+	const elNav = $$(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
+	if (elNav)
+		return initMenu(elNav);
+
+	const elBar = $$("top_userbar");
+	if (!elBar)
+		return;
+
+	/* The avatar sits just left of the username block, so it - not the username -
+	 * is the anchor that puts the button left of the whole cluster. Whichever
+	 * comes first in document order wins, so this survives them being reordered. */
+	const elUser = elBar.querySelector(".username.user_dd, #user_account_trigger");
+	const elAvatar = elBar.querySelector("img[src*='useravatar']");
+	let elAnchor = elUser && elAvatar
+		? (elAvatar.compareDocumentPosition(elUser) & Node.DOCUMENT_POSITION_FOLLOWING ? elAvatar : elUser)
+		: (elUser || elAvatar);
+
+	/* Climb out of inline wrappers so the button is never nested inside the
+	 * profile <a> - a focusable div inside a link breaks both. */
+	while (elAnchor
+		&& elAnchor.parentElement
+		&& elAnchor.parentElement !== elBar
+		&& /^(?:A|SPAN|B|I|EM|STRONG|LABEL|FONT)$/.test(elAnchor.parentElement.tagName))
+		elAnchor = elAnchor.parentElement;
+
+	const elHost = createFallbackMenuHost();
+	if (elAnchor && elAnchor.parentNode)
+		elAnchor.parentNode.insertBefore(elHost, elAnchor);
+	else
+		/* logged out: no avatar or username to anchor to */
+		(elBar.querySelector(".top_userbar_container") || elBar).append(elHost);
+
+	initMenu(elHost);
+	/* fixCSS() may already have run for this page; re-resolve so the menu's own
+	 * [data-v-ID] rules bind to the host's data-v-1 instead of dead-ending. */
+	fixCSS();
+};
+
+mountMenu();
 
 /**
  * MutationObserver callback function that tracks changes in the DOM.
@@ -2015,6 +2094,12 @@ const init = () =>
 
 	fixCSS();
 	window.addEventListener("load", fixCSS, false);
+	/* The top-level call runs at document-start, before any bar exists. Retry once
+	 * the page is up: on Blueprint the MutationObserver has usually mounted the
+	 * menu already and mountMenu() no-ops on initMenu.elMenu, so there is never a
+	 * second menu. mountMenu() re-runs fixCSS() itself, so listener order with the
+	 * line above does not matter. */
+	window.addEventListener("load", mountMenu, false);
 	document.head.append(style);
 
 	//for some reason observer failed to process everything while page is still loading, so we do it manually
@@ -3041,5 +3126,130 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
 		max-width: 217px;
 	}
 
+}
+
+/* ---- classic-layout fallback menu ---- */
+
+/* float:left, matching .username.user_dd. Floats are strictly source-ordered
+   among themselves, and the host is inserted ahead of the user block, so the
+   button is guaranteed to sit left of the username. The inline avatar may
+   reflow to the right of the name as a result; if that looks wrong, swapping
+   this to display:inline-block with vertical-align:middle leaves the avatar
+   put, at the cost of that guarantee. */
+.sdp-fallbackHost
+{
+	position: relative;
+	z-index: 1000;
+	float: left;
+	margin-right: 8px;
+	font: 700 11px arial, sans-serif;
+}
+
+/* the padding children and the template initMenu() cloned from */
+.sdp-fallbackHost > :not(.sdp-menu)
+{
+	display: none;
+}
+
+.sdp-fallbackHost .sdp-menu > div[role="button"]
+{
+	display: flex;
+	align-items: center;
+	padding: 3px 8px;
+	border: 1px solid #ffffff2e;
+	border-radius: 3px;
+	background: #ffffff14;
+	color: #ddd;
+	column-gap: 4px;
+	cursor: pointer;
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.sdp-fallbackHost .sdp-menu > div[role="button"]:hover
+{
+	background: #ffffff2e;
+	color: #fff;
+}
+
+.sdp-fallbackHost .sdp-menu > div[role="button"] p
+{
+	margin: 0;
+}
+
+.sdp-fallbackHost .sdp-menu > div[role="button"]::after
+{
+	content: "▾";
+	font-size: 10px;
+	opacity: 0.8;
+}
+
+.sdp-fallbackHost .sdp-menu > ul
+{
+	position: absolute;
+	z-index: 2147483000;
+	top: calc(100% + 5px);
+	right: 0;
+	display: none;
+	overflow-y: auto;
+	min-width: 264px;
+	max-height: 80vh;
+	padding: 6px;
+	border: 1px solid #0000002e;
+	border-radius: 5px;
+	margin: 0;
+	background: #fff;
+	box-shadow: 0 6px 20px #00000038;
+	color: #222;
+	font-weight: normal;
+	list-style: none;
+	text-align: left;
+}
+
+.sdp-fallbackHost .sdp-menu:focus-within > ul
+{
+	display: block;
+}
+
+/* Blueprint supplies the display:flex that makes the existing column-gap rule
+   mean anything. Without it the ☐ glyph butts straight against the label. */
+.sdp-fallbackHost .slickdealsHeaderDropdownItem__link
+{
+	display: flex;
+	align-items: center;
+	padding: 2px 4px;
+	color: #222;
+	column-gap: 6px;
+}
+
+.sdp-fallbackHost .sdp-menu > ul > li.slickdealsHeaderDropdownItem
+{
+	padding: 3px 2px;
+}
+
+.sdp-fallbackHost .sdp-menu li.input
+{
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	column-gap: 6px;
+}
+
+.sdp-fallbackHost .changes > *
+{
+	color: #444;
+}
+
+body.darkMode .sdp-fallbackHost .sdp-menu > ul
+{
+	border-color: #ffffff26;
+	background: #1e1e1e;
+	color: #ddd;
+}
+
+body.darkMode .sdp-fallbackHost .slickdealsHeaderDropdownItem__link,
+body.darkMode .sdp-fallbackHost .changes > *
+{
+	color: #ddd;
 }`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties,indent,no-return-assign*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
