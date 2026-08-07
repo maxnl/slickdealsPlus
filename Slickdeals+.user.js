@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.10.9
+// @version      26.10.10
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.10.9";
-const CHANGES = `! links stopped resolving at all, and ordinary navigation links were being looked up too`;
+const VERSION = "26.10.10";
+const CHANGES = `! opening the menu grew the top bar and displaced the avatar`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3333,6 +3333,20 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
 .sdp-fallbackHost > :not(.sdp-menu)
 {
 	display: none;
+}
+
+/* initMenu() inserts this next to the host on focus and removes it on blur, so
+   a click anywhere else closes the panel. Blueprint supplies its styling; the
+   classic layout has no such rule, so it arrived as a plain block div sitting
+   in the user bar - which is what made opening the menu grow the bar and push
+   the avatar out of it. Give it the out-of-flow styling it is meant to have.
+   Below the host's z-index so the panel stays clickable above it. */
+.sdp-fallbackHost + .slickdealsHeader__overlay
+{
+	position: fixed;
+	z-index: 999;
+	background: transparent;
+	inset: 0;
 }
 
 .sdp-fallbackHost .sdp-menu > div[role="button"]
