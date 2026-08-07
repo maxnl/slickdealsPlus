@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.9.5
+// @version      26.9.6
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.9.5";
-const CHANGES = `! links whose destination contained a % were mangled, and could stop the rest of the page's links being processed`;
+const VERSION = "26.9.6";
+const CHANGES = `! menu text was bold and outlined, and the loading counter sat on top of the arrow`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3194,13 +3194,15 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
    reflow to the right of the name as a result; if that looks wrong, swapping
    this to display:inline-block with vertical-align:middle leaves the avatar
    put, at the cost of that guarantee. */
+/* No font shorthand here. It used to carry 700 11px to match the bar, but
+   shorthand inherits, so every label in the dropdown came out bold 11px. The
+   button sets its own font below; the panel sets its own. */
 .sdp-fallbackHost
 {
 	position: relative;
 	z-index: 1000;
 	float: left;
 	margin-right: 8px;
-	font: 700 11px arial, sans-serif;
 }
 
 /* the padding children and the template initMenu() cloned from */
@@ -3220,8 +3222,19 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
 	color: #ddd;
 	column-gap: 4px;
 	cursor: pointer;
+	font: 700 11px arial, sans-serif;
 	line-height: 16px;
+	text-shadow: none;
 	white-space: nowrap;
+}
+
+/* The loading indicator (html[data-loading] .sdp-menu::before/::after, showing
+   how many link resolutions are still in flight) is absolutely positioned at
+   right:0.1em of .sdp-menu - exactly where this button draws its arrow, so the
+   count sat on top of the caret. Reserve that corner for it. */
+html[data-loading] .sdp-fallbackHost .sdp-menu > div[role="button"]
+{
+	padding-right: 2.6em;
 }
 
 .sdp-fallbackHost .sdp-menu > div[role="button"]:hover
@@ -3259,9 +3272,26 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
 	background: #fff;
 	box-shadow: 0 6px 20px #00000038;
 	color: #222;
-	font-weight: normal;
+	font: normal 12px/1.5 arial, helvetica, sans-serif;
 	list-style: none;
 	text-align: left;
+	text-shadow: none;
+}
+
+/* The classic bar sets bold and a white text-shadow on its descendants, and the
+   panel lives inside that bar, so it inherited both - the halo that made the
+   labels hard to read. The page's own selectors out-specify a bare inherited
+   value, so reset explicitly on the elements that carry text. */
+.sdp-fallbackHost .sdp-menu > ul li,
+.sdp-fallbackHost .sdp-menu > ul a,
+.sdp-fallbackHost .sdp-menu > ul span,
+.sdp-fallbackHost .sdp-menu > ul div,
+.sdp-fallbackHost .sdp-menu > ul label,
+.sdp-fallbackHost .sdp-menu > ul input,
+.sdp-fallbackHost .sdp-menu > ul textarea
+{
+	font-weight: normal;
+	text-shadow: none;
 }
 
 .sdp-fallbackHost .sdp-menu:focus-within > ul
