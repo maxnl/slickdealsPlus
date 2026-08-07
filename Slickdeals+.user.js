@@ -1827,7 +1827,15 @@ const processLinks = (node, force) =>
 		elLink._hrefOrig = elLink.href;
 		elLink._elHover.href = elLink.href;
 		// const u2 = elLink.href.match(/(?:\?|&(?:amp;)?)u2=([^#&]*)/i);
-		let url = queryObject.has("u2") ? decodeURIComponent(queryObject.get("u2")) : SETTINGS(id);
+		/* URLSearchParams.get() already percent-decodes. The decodeURIComponent()
+		 * that wrapped this decoded a second time: a destination carrying %2520
+		 * collapsed to a literal space, and one carrying a bare % threw URIError.
+		 * That throw was uncaught and propagated out of the loop, so a single deal
+		 * linking to something like ".../100%" aborted link processing for every
+		 * remaining link - the same failure shape as the return-vs-continue bug.
+		 * Leftover from when u2 was extracted with a regex, which did hand back
+		 * the raw encoded value and so needed decoding. */
+		let url = queryObject.has("u2") ? queryObject.get("u2") : SETTINGS(id);
 
 		const aLinks = linksData[id] || [elLink];
 		const isInited = aLinks.resolved !== undefined;
