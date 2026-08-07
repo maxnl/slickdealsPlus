@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.9.3
+// @version      26.9.4
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.9.3";
-const CHANGES = `! link cache could not recover when browser storage filled up`;
+const VERSION = "26.9.4";
+const CHANGES = `+ Debug option is now visible in this menu\n! errors in the ad filter and link resolver were swallowed silently`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -77,7 +77,11 @@ const SETTINGS = (() =>
 			description: "Block ads (require page reload)",
 		},
 		debug: { /* debug mode: 0 = off, 1 = on, 2 = off and hide menu */
-			default: 2,
+			/* Fork change: upstream ships 2, which is off *and* hidden - the menu
+			 * item only renders when SETTINGS.debug < 2, so the diagnostic that
+			 * identifies an over-blocking filter is not reachable from the UI at
+			 * all. 0 is equally silent but leaves the switch visible. */
+			default: 0,
 			name: "Debug",
 			description: "Show debug messages in the console",
 		},
@@ -228,6 +232,13 @@ const SETTINGS = (() =>
 					links.set(id, value);
 			}
 		}
+		/* Changing the default alone would reach nobody: existing installs have 2
+		 * stored, so the menu item stays hidden for exactly the people who
+		 * already have the script. Promote a stored 2 to 0 once - both mean
+		 * "logging off", so this only reveals the switch, it never starts
+		 * logging. A deliberate 1 is left alone. */
+		if (compareVersion(previousVersion, "26.9.4") < 0 && settings.get("debug") === 2)
+			settings.set("debug", 0);
 	}
 	/* clean up old/invalid settings */
 	for(const [id] of settings)
@@ -656,7 +667,22 @@ const noAds = (() =>
 		{
 			return Reflect.apply(_function, this, args);
 		}
-		catch{}
+		catch(error)
+		{
+			/* A bare catch here meant that when a patched DOM method threw, the
+			 * page broke with no console output at all. Combined with the
+			 * innerHTML setter returning silently when it blocks, that is the
+			 * single biggest reason the Quick View bug took so long to isolate.
+			 * debug() is fVoid unless SETTINGS.debug === 1, so this costs nothing
+			 * when logging is off. */
+			debug(debugPrefix + "%cDOM_" + name + " failed",
+				colors[1],
+				colors.dom,
+				error,
+				args,
+				this
+			);
+		}
 	};
 
 	/**
@@ -1874,7 +1900,22 @@ const processLinks = (node, force) =>
 
 					aLinks.resolved = true;
 				}
-				catch{}
+				catch(error)
+				{
+					/* A decode or link-update failure used to vanish here, leaving
+					 * the link silently unresolved with no way to tell why.
+					 * Literal styles, not the `colors` map - that is scoped inside
+					 * the noAds IIFE and unreachable here, and debug()'s arguments
+					 * evaluate eagerly, so referencing it would throw inside the
+					 * error handler itself even with logging off. */
+					debug(debugPrefix + "%cresolve failed",
+						"color:red",
+						"color:#656",
+						error,
+						id,
+						response
+					);
+				}
 				return response;
 			})
 			.finally(() =>
