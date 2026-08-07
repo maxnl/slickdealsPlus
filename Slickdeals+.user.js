@@ -914,17 +914,27 @@ const noAds = (() =>
 				}
 				// debug(debugPrefix + "allowed%c script", colors[0], colors.script, url, textContent, CLONE(isAds.result));
 			}
-			else if ((node instanceof HTMLLinkElement || node instanceof HTMLImageElement) && node.href && isAds(node.href))
+			else if (node instanceof HTMLLinkElement || node instanceof HTMLImageElement)
 			{
-				debug(debugPrefix + "blocked%c tracker" + (isAds.result.type === "blockText" ? "" : " src"),
-					colors[1],
-					colors.tracker,
-					CLONE(isAds.result),
-					node.href,
-					node
-				);
-				node.remove();
-				continue;
+				/* HTMLImageElement has no `href` property, so the old `node.href` test
+				 * was always undefined and images were never swept here. That is the
+				 * gap the innerHTML text-filter gate opens: a tracking pixel injected
+				 * as markup is no longer caught by blockText, and this sweep - the
+				 * remaining line of defence - skipped every img. Images carry the URL
+				 * on `src`; link elements still use `href`. */
+				const url = node.src || node.href;
+				if (url && isAds(url))
+				{
+					debug(debugPrefix + "blocked%c tracker" + (isAds.result.type === "blockText" ? "" : " src"),
+						colors[1],
+						colors.tracker,
+						CLONE(isAds.result),
+						url,
+						node
+					);
+					node.remove();
+					continue;
+				}
 			}
 
 			if (!node.matches)
