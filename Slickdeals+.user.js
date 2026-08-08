@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.8
+// @version      26.11.9
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.8";
+const VERSION = "26.11.9";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,7 @@ const VERSION = "26.11.8";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `+ the script now identifies itself as a fork in the userscript manager and the menu`;
+const CHANGES = `! "Free Only" did nothing on the classic layout and search results`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2753,6 +2753,36 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .categoryPage__m
 html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
 html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff,.highlightRating,.free),
 .searchPage__headerContent:empty /* search results */
+{
+	display: none;
+}
+
+/* Classic layout and search results.
+ *
+ * Every rule above filters an li inside one of seven named containers. Both
+ * of these layouts express a card as a div that is itself the card -
+ * div.dealitem on the classic pages, div.resultRow on /newsearch.php - so none
+ * of those selectors could ever match and "Free Only" silently did nothing on
+ * either page. The classes are already applied there (both paint their
+ * highlight correctly), so only the hide rule was missing.
+ *
+ * :is() rather than twelve more lines: these two selectors are identical
+ * except for the class, and the combination matrix above is already long
+ * enough to hide a gap like this one in. Multi-argument :not() is used
+ * throughout the block above, so this needs no wider browser support than the
+ * file already assumes.
+ *
+ * diffOnly and ratingOnly are unreachable from the menu today - their
+ * createMenuItem() calls are commented out - but they are kept in step with
+ * freeOnly so that re-enabling them does not reopen this same gap on exactly
+ * these two layouts. */
+html.freeOnly :is(div.dealitem, div.resultRow):not(.free),
+html.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff),
+html.ratingOnly.highlightRating :is(div.dealitem, div.resultRow):not(.highlightRating),
+html.freeOnly.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff,.free),
+html.freeOnly.ratingOnly.highlightRating :is(div.dealitem, div.resultRow):not(.highlightRating,.free),
+html.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff,.highlightRating),
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff,.highlightRating,.free)
 {
 	display: none;
 }
