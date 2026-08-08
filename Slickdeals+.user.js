@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.4
+// @version      26.11.5
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.4";
-const CHANGES = `* updates now track published releases instead of the latest commit`;
+const VERSION = "26.11.5";
+const CHANGES = `! changelog entries were cramped under the Changes heading and wrapped out of line`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3566,17 +3566,34 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
    landed on top of the wrapped text. Keep it in the flow, and give the entries
    room for a hanging marker so a wrapped second line lines up under the first
    instead of under the "!". */
-.sdp-fallbackHost .changes
+/* Scoped through #sdpChanges deliberately. The rule that reveals this element -
+   the one selecting #sdpChanges:checked followed by .changes - also sets a
+   0.6em margin, and an ID beats two classes, so a plain .sdp-fallbackHost
+   .changes margin here is silently discarded. Matching the ID outranks it. */
+.sdp-fallbackHost #sdpChanges:checked ~ .changes
 {
-	margin: 0.4em 0 0;
+	margin: 1.4em 0.6em 0.2em;
 	line-height: 1.45;
 }
 
+/* The type marker is an inline-block with a negative left margin, so it pushed
+   the first line of an entry to the right while wrapped lines stayed at the
+   padding edge - the two did not line up. Position it instead, so every line of
+   an entry starts at the same place and the marker hangs beside them. */
 .sdp-fallbackHost .changes > div
 {
-	padding-left: 1.2em;
-	margin-bottom: 0.35em;
+	position: relative;
+	padding-left: 1.4em;
+	margin-bottom: 0.4em;
 	text-indent: 0;
+}
+
+.sdp-fallbackHost .changes > div::before
+{
+	position: absolute;
+	left: 0;
+	width: auto;
+	margin-left: 0;
 }
 
 .sdp-fallbackHost .changesLink
