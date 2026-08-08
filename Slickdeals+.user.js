@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.1
+// @version      26.11.2
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.1";
-const CHANGES = `! link resolving worked again - the id sent to the resolver had been changed and it no longer recognised it`;
+const VERSION = "26.11.2";
+const CHANGES = `* menu now grows to fit its contents instead of scrolling early`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3434,7 +3434,12 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
 	display: none;
 	overflow-y: auto;
 	min-width: 264px;
-	max-height: 80vh;
+	/* Grow to whatever the content needs, stopping only at the window edge. The
+	   panel opens just under the bar, so subtract that plus a small gap. 80vh
+	   made it scroll while a fifth of the window sat empty below it, and this is
+	   a small, infrequently opened menu - scrolling should be the last resort,
+	   not the default. overflow-y stays auto for the genuinely-too-tall case. */
+	max-height: calc(100vh - 3.5rem);
 	padding: 6px;
 	border: 1px solid #0000002e;
 	border-radius: 5px;
