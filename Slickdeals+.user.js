@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.5
+// @version      26.11.6
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.5";
-const CHANGES = `! changelog entries were cramped under the Changes heading and wrapped out of line`;
+const VERSION = "26.11.6";
+const CHANGES = `+ classic layout: free and price-difference highlighting now work there too`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1712,7 +1712,15 @@ const processCards = (node, force) =>
 				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
 				`.dealCard__price${processed},` +
 				`.dealDetailsMainDesktopBlock__finalPrice${processed},` +
-				`.dealPrice${processed}`
+				`.dealPrice${processed},` +
+				/* Classic layout. Its price carries no class at all - it is a bare
+				 * <b> inside <span class="dealblocktext"><strong>. The shipping line
+				 * ("+ Free S/H") is a sibling <b> in the same <strong>, and it must
+				 * not be picked up: rePriceFree below is /free/, so "+ Free S&H"
+				 * would flag every free-shipping deal as a free item, and being the
+				 * later match it would win. Every card surveyed puts the price in
+				 * the first <b> of a single <strong>, so :first-of-type is exact. */
+				`.dealblocktext strong > b:first-of-type${processed}`
 		, node, true) || [];
 
 	if (nlItems.length === 0)
@@ -2467,6 +2475,32 @@ body.darkMode li.free
 .resultRow.highlightRating
 {
 	background-color: var(--backgroundColor);
+}
+
+/* Classic layout. Everywhere else the highlight works by redefining
+ * --backgroundColor / --cardBackgroundColor and letting the page's own Vue
+ * stylesheets consume them. The classic (vBulletin) pages predate those
+ * variables and consume nothing, so setting the custom property there painted
+ * exactly nothing - the div.free/div.highlightDiff/div.highlightRating rules
+ * above were already matching, they just had no reader. Consume it explicitly,
+ * the same way the search results do. */
+div.dealitem.free,
+div.dealitem.highlightDiff,
+div.dealitem.highlightRating
+{
+	background-color: var(--backgroundColor);
+}
+
+/* The price sits in a bare <strong> with no class, so none of the
+ * [data-deal-diff] selectors above reach it. Same treatment: block-level so the
+ * saving lands on its own line under the price rather than beside the shipping
+ * note. */
+html.showDiff .dealblocktext strong[data-deal-diff]::after
+{
+	display: block;
+	width: 100%;
+	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
+	font-style: italic;
 }
 
 /* stylelint-disable-next-line no-descending-specificity */
