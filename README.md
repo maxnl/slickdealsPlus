@@ -2,6 +2,8 @@
 
 [![version](https://img.shields.io/github/v/release/maxnl/slickdealsPlus?label=version&sort=semver)](https://github.com/maxnl/slickdealsPlus/releases/latest)
 
+A fork of [vanowm/slickdealsPlus](https://github.com/vanowm/slickdealsPlus) by V@no, maintained by [maxnl](https://github.com/maxnl). Version numbers here are independent of upstream's and do not correspond to them.
+
 *Have you ever looked in DevTools while browsing slickdeals.net?*
 
 *It's mind-boggling how much useless (to the visitor) stuff it downloads, __uploads__ to other servers and stores on your computer*
