@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.2
+// @version      26.11.3
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.2";
-const CHANGES = `* menu now grows to fit its contents instead of scrolling early`;
+const VERSION = "26.11.3";
+const CHANGES = `* hardened three places that would misbehave on markup the script has not met yet`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1252,7 +1252,9 @@ const initMenu = elNav =>
 		// elSetting.value = SETTINGS(id);
 		elSetting.id = id;
 		elSetting.setAttribute("tabindex", 0);
-		elSetting.dataset[dataset] = "";
+		if (dataset)
+			elSetting.dataset[dataset] = "";
+
 		elLi.classList.add(id);
 		elLi.title = description;
 
@@ -1326,6 +1328,10 @@ const initMenu = elNav =>
 
 	elUl.dataset.qaHeaderDropdownList = "slickdeals-plus";
 	const elLiDefault = elUl.querySelector("li").cloneNode(true);
+	/* Blueprint's li carries the page's Vue scope attribute, and the fallback host
+	 * supplies data-v-1 for the same reason. If a future layout ships neither this
+	 * was undefined, and every `dataset[dataset] = ""` below then wrote a literal
+	 * data-undefined attribute onto the menu. Guard the writes instead. */
 	const dataset = Object.keys(elLiDefault.firstElementChild.dataset)[0];
 	elUl.innerHTML = "";
 	elLiDefault.innerHTML = "";
@@ -1391,7 +1397,9 @@ const initMenu = elNav =>
 	elFooter.setAttribute("for", "sdpChanges");
 	elFooter.dataset.label = "v" + VERSION;
 	elFooter.title = "Changes";
-	elFooter.dataset[dataset] = "";
+	if (dataset)
+		elFooter.dataset[dataset] = "";
+
 
 	const elFooterCheckbox = document.createElement("input");
 	elFooterCheckbox.id = "sdpChanges";
@@ -1486,7 +1494,17 @@ const $$ = (id, node, all) =>
 			node = document;
 
 		if (!all && /\w/.test(id[0]))
-			return node.getElementById(id);
+		{
+			/* getElementById exists on Document, not on Element. Scoped to an
+			 * element this threw, and the bare catch below turned that into a
+			 * silent undefined - a lookup that looks like it simply found nothing.
+			 * No current caller passes a bare word with an element, so this is a
+			 * trap for the next edit rather than a live bug. An id selector is
+			 * what the caller meant either way. */
+			return node.getElementById
+				? node.getElementById(id)
+				: node.querySelector("#" + CSS.escape(id));
+		}
 
 		if (all)
 			return node.querySelectorAll(id);
@@ -1801,6 +1819,31 @@ const processCards = (node, force) =>
  * @param {NodeList|Element} node - The node or NodeList to search for cards.
  * @returns {void}
  */
+/**
+ * Reads a vote count as rendered on the page.
+ *
+ * parseInt handles the leading "+" of the classic layout's "+75", but stops at
+ * the first non-digit: a thousand-plus count shown as "1,234" reads as 1, and a
+ * "1.2k" also reads as 1. That would silently mis-score exactly the deals with
+ * the most votes - the ones highlighting is for. No count above 999 has been
+ * observed, so the grouped and abbreviated forms are precautionary.
+ * @function
+ * @param {string} text - The element's text, e.g. "+75", "1,234", "1.2k".
+ * @returns {number} the count, or NaN if there is no number in it
+ */
+const parseVotes = text =>
+{
+	const match = /^\s*\+?\s*([\d,.]+)\s*([km])?/i.exec(text || "");
+	if (!match)
+		return Number.NaN;
+
+	const value = Number.parseFloat(match[1].replace(/,/g, ""));
+	if (!match[2] || Number.isNaN(value))
+		return value;
+
+	return Math.round(value * (match[2].toLowerCase() === "k" ? 1000 : 1_000_000));
+};
+
 const highlightCards = node =>
 {
 	let nlItems;
@@ -1833,7 +1876,7 @@ const highlightCards = node =>
 		);
 		if (elVotes && elVotes.textContent !== "")
 		{
-			const votes = Number.parseInt(elVotes.textContent || 0);
+			const votes = parseVotes(elVotes.textContent);
 			elCard.classList.toggle("highlightRating", SETTINGS.highlightRating && votes > 0 && votes >= SETTINGS.highlightRating);
 		}
 		if (elCard.dataset.dealPercent)
