@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.11
+// @version      26.11.12
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.11";
+const VERSION = "26.11.12";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,8 @@ const VERSION = "26.11.11";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! version number is now an even 15px from both menu edges`;
+const CHANGES = `! unresolvable links no longer print an error for each one
+! an empty entry leaked per link the resolver could not resolve`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2016,6 +2017,10 @@ const processLinks = (node, force) =>
 			datasets.loading = 0;
 
 		datasets.loading++;
+		/* Count requests in flight for this group, so updateLinks() can tell a
+		 * group that is merely still waiting from one that has finished and has
+		 * nothing left to show. See the reclaim condition there. */
+		aLinks.pending = (aLinks.pending || 0) + 1;
 
 		/**
 		 * Resolves a URL
@@ -2068,11 +2073,32 @@ const processLinks = (node, force) =>
 			})
 			.finally(() =>
 			{
+				aLinks.pending--;
 				if (!--datasets.loading)
 					delete datasets.loading;
 
 			})
-			.catch(console.error);
+			.catch(error =>
+			{
+				/* console.error, so every link the service could not resolve printed
+				 * a red stack trace. That is not an error condition: a page carries
+				 * hundreds of links, plenty of them are not resolvable, and the
+				 * outcome is already visible - the link keeps its original href and
+				 * its notResolved class. The noise buried the failures that do
+				 * matter and made the console useless for diagnosing anything else.
+				 *
+				 * Route it through debug() like every other diagnostic here: silent
+				 * unless Debug is ticked, and identical in shape to the inner
+				 * handler above, including the literal styles (the colors map is
+				 * scoped inside the noAds IIFE and unreachable from here). */
+				debug(debugPrefix + "%cresolve failed",
+					"color:red",
+					"color:#656",
+					error,
+					id,
+					elLink._hrefOrig
+				);
+			});
 	}
 };
 
@@ -2149,11 +2175,17 @@ const updateLinks = () =>
 			else
 				aLinks.splice(i, 1);
 		}
-		/* Only once the id has finished resolving: an in-flight request still
-		 * holds this array in its closure, and re-creating it underneath would
-		 * split the group in two. The destination itself survives in the cache,
-		 * so a later link with this id just re-reads it. */
-		if (aLinks.length === 0 && aLinks.resolved)
+		/* Never while a request is in flight: it still holds this array in its
+		 * closure, and re-creating it underneath would split the group in two.
+		 * Otherwise the entry is finished with - either it resolved, in which case
+		 * the destination survives in the cache and a later link with this id just
+		 * re-reads it, or it failed and nothing is coming.
+		 *
+		 * Testing `resolved` alone was the leak: a group whose resolution failed
+		 * never sets it, so once its links left the page the emptied array stayed
+		 * in linksData for the life of the tab and this loop kept walking it.
+		 * Infinite scroll replaces cards constantly, so those accumulate. */
+		if (aLinks.length === 0 && !aLinks.pending)
 			delete linksData[id];
 	}
 };
