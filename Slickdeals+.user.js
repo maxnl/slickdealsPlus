@@ -4,12 +4,12 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.3
+// @version      26.11.4
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
-// @downloadURL  https://raw.githubusercontent.com/maxnl/slickdealsPlus/master/Slickdeals%2B.user.js
-// @updateURL    https://raw.githubusercontent.com/maxnl/slickdealsPlus/master/Slickdeals%2B.user.js
+// @downloadURL  https://github.com/maxnl/slickdealsPlus/releases/latest/download/Slickdeals.user.js
+// @updateURL    https://github.com/maxnl/slickdealsPlus/releases/latest/download/Slickdeals.user.js
 // @run-at       document-start
 // @inject-into  auto
 // @grant        none
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.3";
-const CHANGES = `* hardened three places that would misbehave on markup the script has not met yet`;
+const VERSION = "26.11.4";
+const CHANGES = `* updates now track published releases instead of the latest commit`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
