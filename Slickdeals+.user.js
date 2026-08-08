@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.6
+// @version      26.11.7
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.6";
-const CHANGES = `+ classic layout: free and price-difference highlighting now work there too`;
+const VERSION = "26.11.7";
+const CHANGES = `! version number in the menu footer sat hard against the panel edge`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2983,6 +2983,11 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mob
 {
 	content: attr(data-label);
 	float: right;
+	/* The label is display:inline, so this float's containing block is the panel
+	 * itself and it lands hard against the panel's 6px padding - close enough to
+	 * the border to read as clipped. Mirror the 1em the "Changes" caption gets on
+	 * the other side so the footer line is inset evenly. */
+	margin-right: 1em;
 }
 
 .sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
