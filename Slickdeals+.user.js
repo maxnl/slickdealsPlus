@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.10
+// @version      26.11.11
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.10";
+const VERSION = "26.11.11";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,7 @@ const VERSION = "26.11.10";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! version number sat closer to the bottom of the menu than to the side`;
+const CHANGES = `! version number is now an even 15px from both menu edges`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3027,19 +3027,38 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mob
 	content: attr(data-label);
 	float: right;
 	/* The label is display:inline, so this float's containing block is the panel
-	 * itself and it lands hard against the panel's 6px padding - close enough to
-	 * the border to read as clipped. Mirror the 1em the "Changes" caption gets on
-	 * the other side so the footer line is inset evenly. */
-	margin-right: 1em;
-	/* And the same below it. The panel's own 6px padding was the only gap under
-	 * the label, so the inset was 17px to the right and 7px underneath - the
-	 * asymmetry read as the version sitting too low in its corner. Matching the
-	 * two puts it an even 17px from both edges.
+	 * itself and it lands hard against the panel's padding - close enough to the
+	 * border to read as clipped. Inset it on both sides; the classic panel, whose
+	 * padding is ours and therefore known, tunes these exactly below.
 	 *
 	 * On the float rather than the panel's padding-bottom: the changelog expands
-	 * below this line, and padding there would push a gap under the changelog
+	 * below this line, and padding there would open a gap under the changelog
 	 * too, which is not what needs fixing. */
+	margin-right: 1em;
 	margin-bottom: 1em;
+}
+
+/* Equal 15px from the glyphs - not from the line box - to both panel edges.
+ *
+ * Matching the boxes is not the same as matching what the eye sees, which is
+ * why the previous attempt still looked off. The label has no descenders
+ * ("v26.11.10 · maxnl fork"), so 4px of empty descender space sits inside its
+ * line box below the last visible pixel, while the right side gives up only
+ * 0.19px of side bearing. Equal margins therefore render as 17px of visible
+ * space to the right and 21px underneath.
+ *
+ * The panel contributes 1px border + 6px padding = 7px on both sides, so:
+ *   right:  7 + margin + 0.19 bearing = 15  ->  margin 8px
+ *   bottom: 7 + margin + 4 descender  = 15  ->  margin 4px
+ *
+ * Scoped to the classic host because the arithmetic depends on that 6px
+ * padding, which is ours. The Blueprint panel is styled by the page, so it
+ * keeps the relative 1em above rather than px tuned for a different box.
+ * Measured by rendering the label and scanning for its last inked pixel. */
+.sdp-fallbackHost .sdp-menu .footer::after
+{
+	margin-right: 8px;
+	margin-bottom: 4px;
 }
 
 .sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
