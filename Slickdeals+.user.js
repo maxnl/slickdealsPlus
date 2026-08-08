@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.9
+// @version      26.11.10
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.9";
+const VERSION = "26.11.10";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,7 @@ const VERSION = "26.11.9";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! "Free Only" did nothing on the classic layout and search results`;
+const CHANGES = `! version number sat closer to the bottom of the menu than to the side`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -3031,6 +3031,15 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mob
 	 * the border to read as clipped. Mirror the 1em the "Changes" caption gets on
 	 * the other side so the footer line is inset evenly. */
 	margin-right: 1em;
+	/* And the same below it. The panel's own 6px padding was the only gap under
+	 * the label, so the inset was 17px to the right and 7px underneath - the
+	 * asymmetry read as the version sitting too low in its corner. Matching the
+	 * two puts it an even 17px from both edges.
+	 *
+	 * On the float rather than the panel's padding-bottom: the changelog expands
+	 * below this line, and padding there would push a gap under the changelog
+	 * too, which is not what needs fixing. */
+	margin-bottom: 1em;
 }
 
 .sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
