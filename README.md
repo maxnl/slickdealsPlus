@@ -24,8 +24,8 @@ Features:
 
 Requires a userscript manager — [Tampermonkey](https://www.tampermonkey.net/) (Chrome, Edge, Firefox, Safari) or [Violentmonkey](https://violentmonkey.github.io/).
 
-**[▶ Install Slickdeals+](https://raw.githubusercontent.com/maxnl/slickdealsPlus/master/Slickdeals%2B.user.js)**
+**[▶ Install Slickdeals+](https://github.com/maxnl/slickdealsPlus/releases/latest/download/Slickdeals.user.js)**
 
-With a userscript manager installed, that link opens Tampermonkey's install prompt directly. The script declares `@updateURL`, so Tampermonkey checks this repository for new versions from then on and updates itself — no need to revisit this page.
+With a userscript manager installed, that link opens Tampermonkey's install prompt directly. It always serves the newest [release](https://github.com/maxnl/slickdealsPlus/releases) rather than a half-finished commit, and the script points `@updateURL` at the same place — so Tampermonkey tracks releases from then on and updates itself, with no need to revisit this page.
 
 [Changes](https://github.com/maxnl/slickdealsPlus/commits/master)
