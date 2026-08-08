@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         Slickdeals+
+// @name         Slickdeals+ (maxnl)
 // @author       maxnl (fork of Slickdeals+ by V@no)
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.7
+// @version      26.11.8
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,8 +20,21 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.7";
-const CHANGES = `! version number in the menu footer sat hard against the panel edge`;
+const VERSION = "26.11.8";
+/* Display only, deliberately kept out of VERSION.
+ *
+ * VERSION is not just a label: resolveUrl() sends it as a path segment to the
+ * third-party resolver (`api + VERSION + "/" + id`). Upstream sends a plain
+ * dotted number there and we know ours is accepted, but we do not know whether
+ * the service parses that segment or merely logs it - and the failure mode if
+ * it parses is a silent 404 that stops every link resolving. So the fork is
+ * marked here, where nothing but the menu reads it, and VERSION stays numeric.
+ *
+ * The other fork markers - @name and @author - are metadata only. Settings and
+ * the link cache are keyed by the literals in LocalStorageName, not by script
+ * identity, so renaming the script cannot orphan them. */
+const FORK = "maxnl fork";
+const CHANGES = `+ the script now identifies itself as a fork in the userscript manager and the menu`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1395,7 +1408,7 @@ const initMenu = elNav =>
 	const elFooter = document.createElement("label");
 	elFooter.className = "slickdealsHeaderDropdownItem footer";
 	elFooter.setAttribute("for", "sdpChanges");
-	elFooter.dataset.label = "v" + VERSION;
+	elFooter.dataset.label = "v" + VERSION + " · " + FORK;
 	elFooter.title = "Changes";
 	if (dataset)
 		elFooter.dataset[dataset] = "";
