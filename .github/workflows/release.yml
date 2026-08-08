@@ -54,8 +54,14 @@ jobs:
               return kind[c] ? `- **${kind[c]}:** ${text}` : c === "#" ? `  ${text}` : `- ${text}`;
             }).join("\n") || "No changelog entries.");
           ')
+          # Attach the script under a name with no "+" in it. GitHub rewrites
+          # characters outside [A-Za-z0-9._-] in asset filenames, so uploading
+          # the repo file as-is would give an asset whose URL we cannot predict.
+          # A fixed name keeps /releases/latest/download/ stable forever, which
+          # is what the README button and @updateURL rely on.
+          cp 'Slickdeals+.user.js' 'Slickdeals.user.js'
           printf '%s\n\n---\n\n[Install this version](%s)\n' \
             "$notes" \
-            "https://github.com/${GITHUB_REPOSITORY}/raw/v$VERSION/Slickdeals%2B.user.js" > notes.md
-          gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/v$VERSION/Slickdeals.user.js" > notes.md
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md 'Slickdeals.user.js'
           echo "Released v$VERSION"
