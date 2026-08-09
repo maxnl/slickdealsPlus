@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.15
+// @version      26.11.16
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.15";
+const VERSION = "26.11.16";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.15";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `* links inside forum posts get an id of their own from the start, so they resolve in one request instead of two
-# a link elsewhere still asks under the shared id, and is asked again only if the answer belongs to another link`;
+const CHANGES = `* the link cache holds 5000 destinations instead of 3000
+# about 2MB at worst, and a fuller cache means fewer lookups sent to the resolver`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -58,11 +58,15 @@ const SETTINGS = (() =>
 	 * Sizing, measured over 14 sampled destinations rather than estimated: URLs
 	 * run 59-321 characters, mean 181, and with a 13-character key plus JSON
 	 * punctuation an entry costs about 200. Browsers account localStorage in
-	 * UTF-16 code units, so budget ~2 bytes per character: about 1.14MB at this
+	 * UTF-16 code units, so budget ~2 bytes per character: about 2.0MB at this
 	 * cap, against a typical 5MB origin quota shared with the settings blob and
 	 * whatever slickdeals.net itself stores. An organically grown cache reached
 	 * 566 entries - roughly 0.22MB - so the cap is generous and, importantly,
 	 * is not normally reached at all.
+	 *
+	 * Raised from 3000 to 5000 in 26.11.16. Around 6000 (~2.3MB) is the sensible
+	 * ceiling: the quota is shared, and the failure mode above it is not a clean
+	 * refusal but settingsSave() evicting in a loop to make a write fit.
 	 *
 	 * Eviction is FIFO, not LRU: Map preserves insertion order and re-setting an
 	 * existing key does not move it, so this drops first-seen rather than
@@ -70,9 +74,11 @@ const SETTINGS = (() =>
 	 * evicting those instead would be strictly worse. True LRU, keeping the most
 	 * recently *used*, would cost a delete+set on every cache read and only
 	 * changes which entries survive once the cap is hit. At 566 observed against
-	 * 3000 it is not hit, so LRU would be optimising a branch that does not run;
-	 * revisit only if the cap starts being reached. */
-	const LINKS_MAX = 3000;
+	 * 5000 it is not hit, so LRU would be optimising a branch that does not run.
+	 * It is also not free of hazard: reads are currently pure, and reordering on
+	 * read would mutate the Map while eviction and settingsSave() iterate it.
+	 * Revisit only if the cap starts being reached. */
+	const LINKS_MAX = 5000;
 	// upgrade from v1.12
 	const oldData = localStorage.getItem("linksCache");
 	if (oldData)
