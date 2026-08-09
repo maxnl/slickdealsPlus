@@ -172,6 +172,25 @@ Rejection is deliberately conservative: the link keeps its original href, stays 
 still reaches the correct page through Slickdeals' redirect. What it loses is the unwrap, not the
 destination.
 
+**A rejected answer is asked again under a unique id** (26.11.14). Rejecting a wrong destination
+leaves the link unwrapped, which is safe but not the point of the script. Since the service resolves
+any id it holds no entry for, `resolveFresh()` replaces `lno` with the link's own cache key and
+re-derives the id from the modified URL, so the collision cannot happen and the answer is resolved
+for that exact link:
+
+```
+19854408sdtid1lno           -> amazon.com/gp/product/B0GTNLL1H8   (cached, wrong)
+19854408sdtid1433451321lno  -> rei.com/learn/expert-advice/...     (fresh, right)
+```
+
+Both halves are sent because the service checks that the id agrees with the URL. The cache key is
+stable per link, so a repeat visit reuses the entry rather than minting another. An answer that comes
+back cannot be a collision, so it is applied without re-checking - which also recovers the affiliate
+hop the host check would otherwise reject. Every failure path yields `""` and writes nothing:
+`decodeResolved()` rejects an absent body, a non-ok `Response`, an empty buffer and anything that
+does not decode to an `http(s)` URL. The retry is chained inside the existing promise so the
+in-flight accounting in `.finally()` still runs once per link.
+
 **Failure handling** (#36). The promise chain ended in `.catch(console.error)`, so every unresolvable
 link printed a red stack trace; a page carries hundreds. Now routed through `debug()`. The group
 reclaim test changed from "did it resolve" to "is anything still in flight", which fixes a leak
@@ -400,8 +419,9 @@ None of these is a defect; all are known and deliberate.
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
 | ~~Colour-variant deal-body links stopped resolving in 26.11.13~~ | **Fixed in 26.11.14.** Confirmed `trd` carries the anchor text; the check now reads `data-product-exitwebsite`. All 7 colour variants resolve to their own ASINs again. |
-| `isDestinationPlausible()` rejects an affiliate hop on an unrelated domain | Observed once in 31 sampled links: a `timex.com` link resolves to `track.flexlinkspro.com` and is held back. A hop onto a *subdomain* of the stated host (`go.loaded.com` for `loaded.com`) is allowed. The failure is graceful — the link keeps its original href, still reaches the right page, and only loses the unwrap — and visible: tick Debug and look for "destination discarded". Fixing it properly means an allowlist of affiliate networks, or the perturbed-`lno` retry below. |
-| **The REI post link still does not unwrap** | Its id collides with other posts' first links and the server serves a cached `amazon.com` for it, which the check correctly rejects. The link works and reaches rei.com; it just keeps the referral hop. A fix exists — resubmit with a perturbed `lno` so the server resolves fresh (measured to return the correct URL) — but it writes a junk entry into V@no's cache for every link it is used on, so it was not adopted without his input. |
+| `isDestinationPlausible()` rejects an affiliate hop on an unrelated domain | Observed once in 31 sampled links: a `timex.com` link resolves to `track.flexlinkspro.com`. A hop onto a *subdomain* of the stated host (`go.loaded.com` for `loaded.com`) is allowed outright. Since 26.11.14 a rejected answer is re-asked under a unique id rather than dropped, and a freshly resolved answer is taken as authoritative, so this recovers instead of failing. Visible either way: tick Debug and look for "destination discarded" followed by "resolved again under a fresh id". |
+| ~~The REI post link does not unwrap~~ | **Fixed in 26.11.14** by the unique-id retry. Fixture thread now unwraps 13 of 13. |
+| The resolver is asked with unbounded concurrency | `processLinks()` fires every link's request at once. Measured over separate connections the service serves roughly 4 at a time; a browser's single multiplexed connection may behave differently, and that has not been measured. Failure is graceful and self-healing — an unresolved link is never cached, so the next page load retries it — so this costs unresolved links on one pageview, not correctness. See [suggested enhancements](#suggested-enhancements). |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 
 ---
@@ -430,15 +450,18 @@ Confirmed at the same time: the full destination is **not** recoverable from the
 `rei.com` URL in the post's markup is the abridged link *text*
 (`https://www.rei.com/learn/expert-...ction.html`), so the resolver remains the only source.
 
-**Retry a rejected link under a perturbed `lno`.** The one repair that would make the REI link
-unwrap. The server resolves an id it has no record for (measured: `19854408sdtid999lno` returns the
-correct rei.com URL where `19854408sdtid1lno` returns the cached amazon.com one), and the id has to
-agree with the submitted URL, so `lno` must be perturbed in both. Scoped to links the plausibility
-check has already rejected it would cost one extra request on roughly 1-8% of links and would fix
-the affiliate-redirector false rejection too, since a freshly resolved answer cannot be a collision.
-Held back because it writes an entry into V@no's cache under a key his own scheme would never
-generate. Worth raising with him upstream before shipping — the collision is his bug to fix, and
-`lno` restarting per post is the root cause.
+**Cap the resolver's concurrency.** `processLinks()` fires `resolveUrl()` for every link in its loop
+with no `await` and no queue, so a thread with 47 resolvable links opens 47 simultaneous requests.
+The service does not serve them: measured over separate connections, 12 requests at concurrency 1
+all succeeded, while 8 or more in flight lost two thirds. Sequentially 30 requests at 200ms spacing
+lost 2. So the constraint is concurrency, not volume, and a small queue (4 in flight, say) would
+resolve every link on a page rather than most of them.
+
+**Measure this from a browser before acting on it.** The numbers above come from separate `curl`
+processes, each with its own TLS handshake, from a datacenter IP with no session cookies. A browser
+issues the same requests as multiplexed streams over a single HTTP/2 connection, which may not trip
+the limit at all — and if it did trip it this badly, unresolved links would be the norm rather than
+the exception. Confirm against a real page before adding machinery for it.
 
 **Local price history.** Store `{dealId: [{price, date}]}` alongside the link cache and flag a card
 when the same item was posted cheaper before. Entirely local. "Is this actually a good price" is the

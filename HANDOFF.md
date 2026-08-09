@@ -20,33 +20,47 @@ links across 25 threads (79%)**, the `Get Deal at Amazon` button and every deal 
 
 The check now reads `data-product-exitwebsite`, the destination host Slickdeals states on the anchor.
 Sampled before adopting, as the old notes demanded: 287 links, 15 distinct hosts, hostname-shaped
-every time, never a merchant name. On the fixture thread 12 of 13 links now unwrap, every colour
-variant to its own ASIN.
+every time, never a merchant name. This alone took the fixture thread from 0 usable links to 12 of
+13, every colour variant to its own ASIN; the thirteenth is the rei.com link, which §2 closes.
 
 ---
 
-## 2. Open item — the REI link still does not unwrap
+## 2. What 26.11.14 also shipped — the unique-id retry
 
-It resolves to `amazon.com`, the check correctly rejects that, and the link keeps its Slickdeals
-href. **It still works and still reaches rei.com** — it just keeps the referral hop.
-
-The fix is known and measured, and is described in full under *Suggested enhancements* in
-`FORK-NOTES.md`. In short: the server resolves any id it has no cached record for, so perturbing
-`lno` in the submitted URL (and in the id derived from it, which must agree) returns the correct
-destination:
+The REI link now unwraps. A rejected answer is re-asked under an id the service cannot already hold
+an entry for: `resolveFresh()` replaces `lno` with the link's own cache key and re-derives the id
+from the modified URL, and the service resolves it on demand.
 
 ```
-19854408sdtid1lno    -> https://www.amazon.com/gp/product/B0GTNLL1H8/...            (cached, wrong)
-19854408sdtid999lno  -> https://www.rei.com/learn/expert-advice/sun-protection.html (fresh, right)
+19854408sdtid1lno           -> amazon.com/gp/product/B0GTNLL1H8   (cached, wrong)
+19854408sdtid1433451321lno  -> rei.com/learn/expert-advice/...     (fresh, right)
 ```
 
-**The open question is not technical.** Doing this writes entries into V@no's cache under keys his
-own scheme would never generate. The collision is upstream's bug — `lno` restarts at 1 in every post
-— so raising it with him is the better first move. Decide that before implementing.
+Fixture thread: 13 of 13 links unwrap. A 23-link sample across 9 previously unvisited threads
+unwrapped 23. The cache key is stable per link, so repeat visits reuse the entry.
 
 ---
 
-## 3. Environment
+## 3. Open item — the resolver is asked with unbounded concurrency
+
+`processLinks()` fires `resolveUrl()` for every link in its loop with no `await` and no queue, so a
+thread with 47 resolvable links opens 47 simultaneous requests.
+
+Measured over separate `curl` connections, the service serves roughly four at a time: 12 requests at
+concurrency 1 all succeeded, 8-plus in flight lost two thirds, while 30 sequential requests at 200ms
+spacing lost 2. That points at a small in-flight cap (4, say) as the fix.
+
+**Measure it from a browser before building anything.** Those numbers come from separate TLS
+connections on a datacenter IP with no session cookies; a browser issues the same requests as
+multiplexed streams over one HTTP/2 connection and may not trip the limit at all. If it tripped this
+badly in practice, unresolved links would be the norm rather than the exception, which they are not.
+
+The failure is graceful and self-healing either way — an unresolved link is never cached, so the next
+page load retries it — so this costs unresolved links on a single pageview, not correctness.
+
+---
+
+## 4. Environment
 
 This session had working network access to both `slickdeals.net` and `slickdeals.net.vano.org`, so
 every measurement above was taken directly with `curl` rather than pasted from a browser console. If
@@ -65,7 +79,7 @@ all, and forum threads are where they live.
 
 ---
 
-## 4. Test fixtures
+## 5. Test fixtures
 
 Thread: `https://slickdeals.net/f/19854408-…` — colour variants in the deal body on page 1, the REI
 post link on page 2. A single fetch of the base URL returns both.
@@ -78,7 +92,7 @@ diagnostic, not a mechanism.
 
 ---
 
-## 5. Before you ship
+## 6. Before you ship
 
 From `FORK-NOTES.md` — the ones this area keeps tripping over:
 
