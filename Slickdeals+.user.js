@@ -55,16 +55,23 @@ const SETTINGS = (() =>
 	 * until recently. Capping on write is cheaper and more predictable than
 	 * relying on the failure path at all.
 	 *
-	 * Sizing: entries observed around 100-150 characters, and browsers account
-	 * localStorage in UTF-16 code units, so budget ~2 bytes per character - about
-	 * 900KB at this cap, against a typical 5MB origin quota shared with the
-	 * settings blob and whatever slickdeals.net itself stores. An organically
-	 * grown cache reached 566 entries, so this is generous.
+	 * Sizing, measured over 14 sampled destinations rather than estimated: URLs
+	 * run 59-321 characters, mean 181, and with a 13-character key plus JSON
+	 * punctuation an entry costs about 200. Browsers account localStorage in
+	 * UTF-16 code units, so budget ~2 bytes per character: about 1.14MB at this
+	 * cap, against a typical 5MB origin quota shared with the settings blob and
+	 * whatever slickdeals.net itself stores. An organically grown cache reached
+	 * 566 entries - roughly 0.22MB - so the cap is generous and, importantly,
+	 * is not normally reached at all.
 	 *
 	 * Eviction is FIFO, not LRU: Map preserves insertion order and re-setting an
 	 * existing key does not move it, so this drops first-seen rather than
-	 * least-recently-used. True LRU would cost a delete+set on every cache read,
-	 * which is not worth it for destinations that rarely change. */
+	 * least-recently-used. That still keeps the most recently *added* entries -
+	 * evicting those instead would be strictly worse. True LRU, keeping the most
+	 * recently *used*, would cost a delete+set on every cache read and only
+	 * changes which entries survive once the cap is hit. At 566 observed against
+	 * 3000 it is not hit, so LRU would be optimising a branch that does not run;
+	 * revisit only if the cap starts being reached. */
 	const LINKS_MAX = 3000;
 	// upgrade from v1.12
 	const oldData = localStorage.getItem("linksCache");

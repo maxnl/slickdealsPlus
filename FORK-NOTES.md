@@ -413,7 +413,15 @@ was one of these five.
   anchor in ten omits it, and those pass through unchecked.
 - **`SETTINGS(id, null)` deletes**, but only for link-cache ids (`/^\d/`). Settings are unaffected —
   `css` is legitimately stored as null and goes through `settings.set()` directly.
-- **`Map` eviction is FIFO, not LRU.** Re-setting an existing key does not move it.
+- **`Map` eviction is FIFO, not LRU.** Re-setting an existing key does not move it. FIFO already
+  keeps the most recently *added* entries; evicting those instead would be strictly worse. LRU -
+  keeping the most recently *used* - only changes anything once the cap is reached, and it is not:
+  an organically grown cache reached 566 entries against a 3000 cap.
+- **Cache sizing, measured** (26.11.15): destinations run 59-321 characters, mean 181; with a
+  13-character key and JSON punctuation an entry costs about 200 characters. localStorage is
+  accounted in UTF-16 code units, so ~1.14MB at the 3000 cap and ~0.22MB at the 566 seen in
+  practice, against a typical 5MB origin quota shared with the settings blob and slickdeals.net's
+  own storage. The earlier 100-150 character estimate was low.
 - **`URLSearchParams.get()` already percent-decodes.** Do not wrap it in `decodeURIComponent`.
 - **`initMenu()` requires** at least 4 children on its host, a `<header>` ancestor
   (`closest("header")` matches self), and a `data-v-1` dataset key — `fixCSS()` resolves the script's
