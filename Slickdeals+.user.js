@@ -35,7 +35,8 @@ const VERSION = "26.11.14";
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
 const CHANGES = `! most links stopped resolving - the destination check compared the host against the link's text
-! links sharing a resolver id are asked again under one that is unique, instead of giving up`;
+! a link sharing its resolver id with another is asked under a unique one, instead of inheriting that link's destination
+# links inside forum posts are asked uniquely from the start; a wrong answer elsewhere is asked again`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
