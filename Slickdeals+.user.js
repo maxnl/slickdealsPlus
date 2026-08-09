@@ -35,8 +35,7 @@ const VERSION = "26.11.14";
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
 const CHANGES = `! most links stopped resolving - the destination check compared the host against the link's text
-! a link sharing its resolver id with another is asked under a unique one, instead of inheriting that link's destination
-# links inside forum posts are asked uniquely from the start; a wrong answer elsewhere is asked again`;
+! a link given another link's destination is asked again under an id of its own, instead of giving up`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2074,19 +2073,14 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		/* Which id to ask under. A link whose id is ambiguous by construction is
-		 * asked uniquely from the start rather than being asked, disbelieved and
-		 * asked again - see resolverRequest(). */
-		const request = resolverRequest(urlObject, key, id);
-
-		resolveUrl(request.id, request.url)
+		resolveUrl(id, elLink._hrefOrig)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
-					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + request.id + " original:" + request.url*/);
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + id + " original:" + elLink._hrefOrig*/);
 
 				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(request.id);
+				const k = new TextEncoder().encode(id);
 				const r = new Uint8Array(response.length)
 					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
 
@@ -2107,25 +2101,12 @@ const processLinks = (node, force) =>
 					 * If the retry comes back empty the link keeps its original
 					 * href and stays notResolved, which is what it would do if the
 					 * service had no answer at all. */
-					/* The check exists to catch one thing: an answer that belongs to
-					 * a different link sharing this one's id. An answer to a unique
-					 * id cannot be that - it was resolved for this exact URL - so it
-					 * is not checked at all, the same reasoning that lets the retry
-					 * below apply its answer unexamined.
-					 *
-					 * Do not reintroduce a check here on the strength of an answer
-					 * measured outside a browser. The service resolves from `u3`,
-					 * and `u3` differs between a signed-out fetch of a page and a
-					 * real session: the same timex.com link answered
-					 * www.flexoffers.com to a curl-fetched URL and the true
-					 * timex.com product URL to a browser's. Anything derived from
-					 * the former describes the fetch, not the link. */
-					if (!request.unique && !isDestinationPlausible(elLink, response))
+					if (!isDestinationPlausible(elLink, response))
 					{
 						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
 							"color:red",
 							"color:#656",
-							request.id,
+							id,
 							elLink._hrefOrig,
 							response
 						);
@@ -2137,7 +2118,7 @@ const processLinks = (node, force) =>
 							debug(debugPrefix + "%cresolved again under a fresh id",
 								"color:green",
 								"color:#656",
-								request.id,
+								id,
 								elLink._hrefOrig,
 								fresh
 							);
@@ -2198,7 +2179,7 @@ const processLinks = (node, force) =>
 					"color:red",
 					"color:#656",
 					error,
-					request.id,
+					id,
 					elLink._hrefOrig
 				);
 			});
@@ -2367,50 +2348,8 @@ const uniqueRequest = (urlObject, key) =>
 };
 
 /**
- * Chooses the id a link is asked under.
- *
- * A link carrying `lno` but no `pno` is a post-content link, and `lno` is the
- * index within a post, so it restarts at 1 in every post: the first link of
- * every post in a thread derives one id and the service answers all of them
- * with whichever destination was recorded first. That is knowable from the
- * link alone, before anything is asked, so those go straight to a unique id
- * instead of spending a request on an answer that cannot be trusted and then
- * spending a second one to repair it.
- *
- * Deal-body links carry `pno`, which makes their ids unique already - all seven
- * colour variants of the fixture thread always resolved correctly - so they
- * keep asking under upstream's id and keep the benefit of the shared cache.
- *
- * Ambiguous is not the same as wrong: a post link whose destination happens to
- * be the one recorded resolves correctly under either id. Asking under the
- * unique id is still the better trade, because it costs one request rather than
- * two whenever the answer would have been wrong, and never costs more than one.
- * The replacement index is this link's cache key, a deterministic crc32, so the
- * id is stable per link and shared by every user of this fork rather than
- * minting a fresh server-side entry per visit.
- * @function
- * @param {URL} urlObject - The link being resolved.
- * @param {string} key - This link's cache key.
- * @param {string} id - The id upstream's scheme derives for this link.
- * @returns {Object} `id` and `url` to ask with, and whether that id is unique
- */
-const resolverRequest = (urlObject, key, id) =>
-{
-	const queryObject = new URLSearchParams(urlObject.search);
-	if (!queryObject.has("lno") || queryObject.has("pno"))
-		return {id: id, url: urlObject.href, unique: false};
-
-	const fresh = uniqueRequest(urlObject, key);
-	if (!fresh)
-		return {id: id, url: urlObject.href, unique: false};
-
-	return {id: fresh.id, url: fresh.url, unique: true};
-};
-
-/**
  * Asks the resolver again under an id it cannot already hold an answer for,
- * after an answer has been rejected. See resolverRequest() for the ids that
- * skip this by being asked uniquely in the first place.
+ * after an answer has been rejected.
  * @function
  * @param {URL} urlObject - The original link.
  * @param {string} key - This link's cache key, used as the replacement index.
