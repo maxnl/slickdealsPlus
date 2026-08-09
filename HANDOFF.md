@@ -1,6 +1,7 @@
 # Handoff — link resolution work
 
-Written at the end of the session that shipped **v26.11.14** (PR #40). Read this with
+Written at the end of the session that shipped **v26.11.14** (PR #40, merged and released) and
+prepared **v26.11.15**. Read this with
 [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable architecture notes; this file holds only
 what the next session needs to pick the work up, and should be deleted once the open items below are
 closed.
@@ -18,7 +19,7 @@ Measured rather than estimated: that check rejected **228 of 287 links across 25
 the `Get Deal at Amazon` button and every deal image included. It was reported as "the colour
 variants stopped resolving"; it was closer to all link resolution stopping.
 
-26.11.14 does three things:
+26.11.14 (released) does the first two; 26.11.15 adds the third:
 
 1. **Checks against `data-product-exitwebsite`**, the destination host Slickdeals states on the
    anchor. Sampled before adopting: 287 links, 15 distinct hosts, hostname-shaped every time, never a
@@ -57,12 +58,13 @@ measurement of *where a link goes* must come from a browser.
 
 ## 3. Outstanding
 
-**Confirm which commit was browser-tested.** All seven commits on PR #40 carry `26.11.14`, so the
-version string cannot distinguish them. The live test that showed the two `timex.com` post links
-resolving correctly is a real-browser validation of item 3 above **only if it ran on `2dfdd97` or
-later**; before that commit those links took the shared-id path instead. Quickest re-check: tick
-Debug and reload thread `19856376`. On `2dfdd97`+ the two post links log no "destination discarded"
-line at all, because they never ask the shared id.
+**Item 3 has not been checked in a browser.** The live test of thread `19856376` ran on the released
+v26.11.14, which predates it, so those two `timex.com` post links were asked under the *shared* id -
+and answered correctly, with the true product URL. Under 26.11.15 they are asked under a unique id
+instead, and the only measurement of what that returns for them came from probes carrying a
+curl-derived `u3`, which answered an opaque `flexoffers.com` redirector. Per §2 that cannot tell a
+real downgrade from an artifact. **This is the one thing to verify before trusting 26.11.15**: load
+`19856376` with the link cache cleared and confirm both post links still land on `timex.com`.
 
 **Unbounded concurrency.** `processLinks()` fires `resolveUrl()` for every link with no `await` and
 no queue, so a thread with 47 resolvable links opens 47 simultaneous requests. Measured over separate

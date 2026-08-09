@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.14** |
+| Current | **v26.11.15** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -72,7 +72,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.11 | [#35](https://github.com/maxnl/slickdealsPlus/pull/35) | Version number an even 15px from both menu edges |
 | 26.11.12 | [#36](https://github.com/maxnl/slickdealsPlus/pull/36) | Resolver console flood silenced; failed-group leak closed |
 | 26.11.13 | — | **Post links no longer resolve to the deal's own destination** |
-| 26.11.14 | — | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
+| 26.11.14 | [#40](https://github.com/maxnl/slickdealsPlus/pull/40) | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
+| 26.11.15 | — | Post-content links are asked under an id of their own from the start |
 
 ---
 
@@ -191,7 +192,7 @@ body, a non-ok `Response`, an empty buffer and anything that does not decode to 
 retry is chained inside the existing promise so the in-flight accounting in `.finally()` still runs
 once per link.
 
-**An ambiguous id is recognised before it is asked** (26.11.14). Whether an id can collide is
+**An ambiguous id is recognised before it is asked** (26.11.15). Whether an id can collide is
 knowable from the link alone: `lno` present and `pno` absent means a post-content link, whose index
 restarts in every post. `resolverRequest()` sends those to a unique id from the start, so a link
 whose answer would have been wrong costs one request rather than two, and never costs more than one.

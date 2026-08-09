@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.14
+// @version      26.11.15
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.14";
+const VERSION = "26.11.15";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,9 +34,8 @@ const VERSION = "26.11.14";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! most links stopped resolving - the destination check compared the host against the link's text
-! a link sharing its resolver id with another is asked under a unique one, instead of inheriting that link's destination
-# links inside forum posts are asked uniquely from the start; a wrong answer elsewhere is asked again`;
+const CHANGES = `* links inside forum posts get an id of their own from the start, so they resolve in one request instead of two
+# a link elsewhere still asks under the shared id, and is asked again only if the answer belongs to another link`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
