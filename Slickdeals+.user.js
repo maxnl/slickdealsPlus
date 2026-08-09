@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.18
+// @version      26.11.19
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.18";
+const VERSION = "26.11.19";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.18";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! a link going to an affiliate redirector re-resolved on every page load and never settled in the cache
-# its cached destination was discarded on the way out by a check the answer had already been exempted from`;
+const CHANGES = `+ free highlighting and Free Only now work in the homepage list view and the /deals/ list view
+# neither renders a comparison price, and the list view shows no vote count, so price-difference and score highlighting cannot apply there`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -492,19 +492,6 @@ const SETTINGS = (() =>
 		const storageData = isLink.test(id) ? links : settings;
 		if (value === undefined)
 			return storageData.get(id);
-
-		/* Only the link cache can be deleted from, and only with an explicit
-		 * null - a destination that turns out to belong to a different link has
-		 * to go, or it is read back and reapplied on every page load. Settings
-		 * are untouched by this: `css` is legitimately stored as null. */
-		if (storageData === links && value === null)
-		{
-			if (!links.delete(id))
-				return false;
-
-			settingsSave();
-			return true;
-		}
 
 		storageData.set(id, value);
 		//trim oldest-first so the cache cannot grow past the cap
@@ -1779,6 +1766,16 @@ const processCards = (node, force) =>
 				`.price${processed},` + //search
 				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
 				`.dealCard__price${processed},` +
+				/* Homepage list view (fpStyle=list). Its card is
+				 * li.frontpageGrid__feedItem > article.dealCardList, so the card
+				 * itself is already found by the `li` in closest() - only the
+				 * price class was missing, which left free highlighting inert
+				 * there while the grid view worked. No comparison price is
+				 * rendered in this view, so price-difference highlighting stays
+				 * structurally impossible, as on the classic front page, and it
+				 * shows no vote count at all so score highlighting cannot apply
+				 * either. */
+				`.dealCardList__salePrice${processed},` +
 				`.dealDetailsMainDesktopBlock__finalPrice${processed},` +
 				`.dealPrice${processed},` +
 				/* Classic layout. Its price carries no class at all - it is a bare
@@ -1863,6 +1860,7 @@ const processCards = (node, force) =>
 			"li," +
 			"div[data-type='fpdeal']," +
 			"div.resultRow," +
+			"div.dealRow," + //list view on /deals/
 			"div[data-role='frontpageDealContent']," +
 			"div.dealitem"
 		);
@@ -1933,6 +1931,7 @@ const highlightCards = node =>
 						"li.categoryPageDealGrid__feedItem," + // https://slickdeals.net/deals/
 						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
 						"div.resultRow," + //search result
+						"div.dealRow," + //list view on /deals/
 						"div.dealitem" //classic layout, both #deal_list and #deal_list_featured
 		, node, true);
 
@@ -2860,7 +2859,22 @@ body.darkMode li.free
 /* search results */
 .resultRow.free,
 .resultRow.highlightDiff,
-.resultRow.highlightRating
+.resultRow.highlightRating,
+.dealRow.free,
+.dealRow.highlightDiff,
+.dealRow.highlightRating
+{
+	background-color: var(--backgroundColor);
+}
+
+/* Homepage list view. Its card is an <article class="dealCardList"> inside the
+ * li, and unlike the grid view's .dealCard it consumes none of the Vue custom
+ * properties, so redefining --backgroundColor on the li painted nothing. Same
+ * treatment as the classic layouts below: consume it explicitly. Scoped to
+ * .dealCardList, which exists only in this view. */
+li.free > .dealCardList,
+li.highlightDiff > .dealCardList,
+li.highlightRating > .dealCardList
 {
 	background-color: var(--backgroundColor);
 }
@@ -2934,6 +2948,7 @@ body.darkMode li.free.highlightRating.highlightDiff .dealCard[data-v-ID]
 
 
 .dealDetailsPriceInfo[data-deal-diff],
+.dealRow.free,
 .resultRow.free
 {
 	position: relative; /* allow box-shadow overlap item below */
@@ -3151,13 +3166,13 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid l
  * createMenuItem() calls are commented out - but they are kept in step with
  * freeOnly so that re-enabling them does not reopen this same gap on exactly
  * these two layouts. */
-html.freeOnly :is(div.dealitem, div.resultRow):not(.free),
-html.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff),
-html.ratingOnly.highlightRating :is(div.dealitem, div.resultRow):not(.highlightRating),
-html.freeOnly.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff,.free),
-html.freeOnly.ratingOnly.highlightRating :is(div.dealitem, div.resultRow):not(.highlightRating,.free),
-html.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff,.highlightRating),
-html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem, div.resultRow):not(.highlightDiff,.highlightRating,.free)
+html.freeOnly :is(div.dealitem, div.resultRow, div.dealRow):not(.free),
+html.diffOnly.highlightDiff :is(div.dealitem, div.resultRow, div.dealRow):not(.highlightDiff),
+html.ratingOnly.highlightRating :is(div.dealitem, div.resultRow, div.dealRow):not(.highlightRating),
+html.freeOnly.diffOnly.highlightDiff :is(div.dealitem, div.resultRow, div.dealRow):not(.highlightDiff,.free),
+html.freeOnly.ratingOnly.highlightRating :is(div.dealitem, div.resultRow, div.dealRow):not(.highlightRating,.free),
+html.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem, div.resultRow, div.dealRow):not(.highlightDiff,.highlightRating),
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem, div.resultRow, div.dealRow):not(.highlightDiff,.highlightRating,.free)
 {
 	display: none;
 }

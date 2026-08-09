@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.18** |
+| Current | **v26.11.19** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -76,7 +76,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.15 | [#41](https://github.com/maxnl/slickdealsPlus/pull/41) | Post-content links are asked under an id of their own from the start |
 | 26.11.16 | [#42](https://github.com/maxnl/slickdealsPlus/pull/42) | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
 | 26.11.17 | [#43](https://github.com/maxnl/slickdealsPlus/pull/43) | Shared-id requests send the link's own href again (no behaviour change) |
-| 26.11.18 | — | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
+| 26.11.18 | [#45](https://github.com/maxnl/slickdealsPlus/pull/45) | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
+| 26.11.19 | — | Free highlighting reaches the homepage list view and the `/deals/` list view |
 
 ---
 
@@ -434,7 +435,21 @@ This is the recurring gap. Free/diff/score support for a layout needs all of:
 5. Filter CSS — the `freeOnly` / `diffOnly` / `ratingOnly` hide rules
 
 Miss any one and the feature is silently inert on that layout. Every classic-layout bug in this fork
-was one of these five.
+was one of these five, and 26.11.19 found two more layouts in the same state - each discovered by
+counting selector matches against real page HTML rather than by anyone noticing:
+
+| Layout | Card | What was missing |
+|---|---|---|
+| `/deals/` list | `div.dealRow` | the card itself - unknown to `closest()`, `highlightCards()`, paint and filter CSS, so **0 of 50** priced cards found a card ancestor |
+| Homepage list (`fpStyle=list`) | `li.frontpageGrid__feedItem > article.dealCardList` | the price class `.dealCardList__salePrice`, and paint - the card reads no Vue custom property, so `--backgroundColor` painted nothing |
+
+Both are structurally limited beyond that, and no amount of selector work changes it: neither renders a
+comparison price, so price-difference highlighting cannot apply, and the homepage list view renders no
+vote count at all, so score highlighting cannot either. Free highlighting and Free Only work in both.
+
+**The check that finds these takes a minute**: fetch the page, run the price selector and the card
+selector over it, and count how many priced elements can reach a card ancestor. Anything short of all
+of them is a layout the script is silently inert on.
 
 ### Other things that will bite
 
