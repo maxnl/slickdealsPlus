@@ -34,7 +34,8 @@ const VERSION = "26.11.16";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `* the link cache holds 5000 destinations instead of 3000
+const CHANGES = `! a destination cached by an older version could be handed out indefinitely - the cache is cleared once on upgrade
+* the link cache holds 5000 destinations instead of 3000
 # about 2MB at worst, and a fuller cache means fewer lookups sent to the resolver`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
@@ -292,6 +293,25 @@ const SETTINGS = (() =>
 		 * logging. A deliberate 1 is left alone. */
 		if (compareVersion(previousVersion, "26.9.4") < 0 && settings.get("debug") === 2)
 			settings.set("debug", 0);
+
+		/* Drop the whole link cache once, on the way in to 26.11.16.
+		 *
+		 * 26.11.15 stopped checking a cached destination for links asked under an
+		 * id of their own, and rightly: such an answer was resolved for that exact
+		 * URL and cannot belong to another link. But entries cached by an earlier
+		 * version were written from the *shared* id, where a collision is exactly
+		 * what could happen - and those are post-content links, the ones most
+		 * likely to hold a wrong destination. The check that used to delete them
+		 * on sight no longer runs for them, so a wrong destination cached before
+		 * 26.11.15 would now be handed out for as long as the entry survives.
+		 *
+		 * Nothing records which id an entry came from, so there is no way to drop
+		 * only the suspect ones. Dropping all of them costs one resolution each,
+		 * spread over ordinary browsing as pages are revisited, against the
+		 * alternative of a wrong destination that never expires. An organically
+		 * grown cache was around 566 entries, so this is a bounded one-off. */
+		if (compareVersion(previousVersion, "26.11.16") < 0)
+			links.clear();
 	}
 	/* clean up old/invalid settings */
 	for(const [id] of settings)
