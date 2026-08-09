@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.12** |
+| Current | **v26.11.14** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -72,6 +72,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.11 | [#35](https://github.com/maxnl/slickdealsPlus/pull/35) | Version number an even 15px from both menu edges |
 | 26.11.12 | [#36](https://github.com/maxnl/slickdealsPlus/pull/36) | Resolver console flood silenced; failed-group leak closed |
 | 26.11.13 | — | **Post links no longer resolve to the deal's own destination** |
+| 26.11.14 | — | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
 
 ---
 
@@ -95,22 +96,40 @@ Why both are needed: `lno` is the link index *within a post*, so it restarts at 
 the first link of every post in a thread shares an id. Using the resolver id as the cache key made
 links inherit whichever destination happened to resolve first (#1, #15).
 
-**What the resolver actually is** (26.11.13, measured). The endpoint is
+**What the resolver actually is** (26.11.14, measured directly over the network). The endpoint is
 `https://slickdeals.net.vano.org/` - V@no's own host, decoded from the obfuscated argument at the
-foot of the script, not a Slickdeals service. It is a **lookup table keyed by the id**, and it does
-not read the URL in the request body. Asked twice about the same link:
+foot of the script, not a Slickdeals service.
 
-```
-19854408sdtid1lno  -> 200, 194 bytes -> https://www.amazon.com/gp/product/B0GTNLL1H8/...
-340707555crc       -> 404, error 7.122
-```
+It is **a cache in front of an on-demand resolver**, not the pure lookup table 26.11.13 recorded.
+Three things were measured, and the first two correct that earlier note:
 
-An id it does not know 404s rather than being answered from the URL supplied, reproducing #24's
-measurement on a second independent link. **No client-side id scheme can fix a wrong destination**:
-the only id the server answers is the ambiguous one. Filtering the answer is the sole remedy
-available. The wrong destination is served rather than cached locally - with `slickdeals+links`
-deleted the link resolved off the wire byte-identical, `ascsubtag` from an unrelated pageview
-included, so the server is replaying another user's recorded destination for the shared id.
+- **It reads the URL in the request body.** The id in the path and the parameters of the URL in the
+  body must agree; a mismatched pair is refused with 404 / error `7.122`. This is why an earlier
+  attempt at a collision-free `getUrlId()` 404'd everything (#24) - not because the id shape was
+  rejected, but because an id that no longer matched the submitted URL never could be.
+- **An id it has no record for is resolved fresh, not 404'd.** Perturbing the REI link's `lno` so
+  the derived id is novel returns the *correct* destination, which the ambiguous id does not:
+
+  ```
+  19854408sdtid1lno    -> https://www.amazon.com/gp/product/B0GTNLL1H8/...   (wrong - cached)
+  19854408sdtid999lno  -> https://www.rei.com/learn/expert-advice/sun-protection.html  (right)
+  19854408sdtid        -> https://www.rei.com/learn/expert-advice/sun-protection.html  (right)
+  ```
+
+- **It requires `Origin` and `Referer`.** Without them every request is refused with 404 / error
+  `1.30`, whatever the id. Any future probing with `curl` must send both or it will look like the
+  service is down.
+
+So a wrong destination is a **stale cache entry on the server keyed by the colliding id**, not an
+inability to resolve. `lno` is the link index within a post and restarts at 1 in every post, so the
+first link of *every* post in a thread is asked under `19854408sdtid1lno`, and whichever one was
+recorded first is served to all of them. Deal-body links are unaffected: they carry `pno`, so their
+ids (`1311423pno19854408sdtid3lno`) are already unique, and all seven colour variants resolve to
+their own distinct ASINs.
+
+The corollary for the fork: a client-side id scheme *can* reach a correct answer, but only by
+perturbing `lno` in the URL that is submitted alongside it, which writes a new entry into someone
+else's cache on every link. Not adopted - see [outstanding items](#outstanding-items).
 
 `u3` decodes (base64url) to 88 bytes of high-entropy data that neither the resolver's own unmasking
 scheme nor any obvious key turns into a URL - presumably encrypted with a server-side key, which is
@@ -138,13 +157,20 @@ answers all of them with the thread's own product page. Reported live — a post
 rendered as the deal's `amazon.com` page, with an `ascsubtag` from a different pageview, which is
 what identified the answer as the service's and not the cache's.
 
-The id shape is not ours to change, so `isDestinationPlausible()` checks the answer against `trd`,
-which the link carries: the outbound URL with non-alphanumeric runs collapsed to `+`, cut at 32
-characters (`https+www+rei+com+learn+expert+c`). Only the host is compared — the resolver
-legitimately returns a different path (`/dp/` comes back as `/gp/product/`, affiliate parameters get
-appended) but never a different site. Scheme and a leading `www` are dropped from both sides; a link
-with no `trd` is passed through unchecked. A rejected destination is neither applied nor cached, and
-a cached one that fails is deleted, so a bad entry written before this check cannot keep reappearing.
+The id we send is derived from the link's own parameters, so a colliding link is always asked under
+the colliding id and always gets the stale answer back. `isDestinationPlausible()` therefore checks
+the answer against `data-product-exitwebsite`, the destination host Slickdeals states on the anchor
+(26.11.14 — 26.11.13 used `trd` for this and was wrong about what `trd` is). Only the host is
+compared: the resolver legitimately returns a different path (`/dp/` comes back as `/gp/product/`,
+affiliate parameters get appended). A subdomain of the stated host matches, so an affiliate hop like
+`go.loaded.com` passes for a link stating `loaded.com`; a redirector on an unrelated domain does not.
+An anchor with no stated host is passed through unchecked. A rejected destination is neither applied
+nor cached, and a cached one that fails is deleted, so a bad entry written before this check cannot
+keep reappearing.
+
+Rejection is deliberately conservative: the link keeps its original href, stays `notResolved`, and
+still reaches the correct page through Slickdeals' redirect. What it loses is the unwrap, not the
+destination.
 
 **Failure handling** (#36). The promise chain ended in `.catch(console.error)`, so every unresolvable
 link printed a red stack trace; a page carries hundreds. Now routed through `debug()`. The group
@@ -223,15 +249,23 @@ stored data, so the startup path never had the problem, and the guard reuses the
 routing that already chose the storage Map — with all 17 settings keys beginning with a letter, no
 setting can fall on the link side of it.
 
-**A signal validated on one sample is not validated** (26.11.13 -> open). `isDestinationPlausible()`
-compares the resolved host against `trd`, and `trd` was read off exactly one link - a forum post whose
-anchor text *was* the URL. On that link, "trd is the sanitised destination URL" and "trd is the
-sanitised anchor text" produce byte-identical strings, so the sample could not discriminate between
-them. The deal body's colour-variant links do: their anchor text is `Dark Gray`, `Khaki`, `& More...`,
-`trd` follows it, and the host check rejects every one - they resolved correctly in 26.11.12 and stop
-resolving in 26.11.13. The failure is the same shape as #1, committed in the same breath as a warning
-about it. The rule that would have caught it: find the case that tells your explanation apart from
-its rival, and test *that* one. See `HANDOFF.md` for the repair options.
+**A signal validated on one sample is not validated** (26.11.13 -> fixed in 26.11.14).
+`isDestinationPlausible()` compared the resolved host against `trd`, and `trd` was read off exactly
+one link - a forum post whose anchor text *was* the URL. On that link, "trd is the sanitised
+destination URL" and "trd is the sanitised anchor text" produce byte-identical strings, so the sample
+could not discriminate between them. Every other link does: `Dark Gray` stores `Dark+Gray`,
+`Deal Image` stores `Deal Image`, and a host comparison rejects them all.
+
+Confirmed by scanning the thread's own markup - `trd` tracked the anchor text on all 31 links - and
+the damage was then measured rather than guessed: **228 of 287 links across 25 threads, 79%**,
+including the `Get Deal at Amazon` button and every deal image. The regression was recorded as
+"colour-variant links stopped resolving"; it was closer to all link resolution stopping. Estimating
+the blast radius of a bug from the one report that surfaced it is its own version of the same
+mistake.
+
+The failure is the same shape as #1, committed in the same breath as a warning about it. The rule
+that would have caught it: find the case that tells your explanation apart from its rival, and test
+*that* one.
 
 **A collision-free cache key does not make the answer right** (26.11.13). #24 established that
 `getUrlId()` must keep upstream's shape and that collision-freedom belongs in `getCacheKey()`. That
@@ -317,10 +351,16 @@ was one of these five.
 ### Other things that will bite
 
 - **`processedMarker` is `℗`** (U+2117), used as a class name. Valid CSS, surprising in a grep.
-- **`trd` on a `/click` link is the destination**, with runs of non-alphanumerics collapsed to `+`
-  and truncated to exactly 32 characters. It is the only ground truth a link carries about where it
-  goes, and `isDestinationPlausible()` is the only consumer. Note `URLSearchParams.get("trd")`
-  returns it with the `+` separators as spaces.
+- **`trd` on a `/click` link is the link's own anchor text**, not its destination, with runs of
+  non-alphanumerics collapsed to `+` and cut at 32 characters. `Dark Gray` stores `Dark+Gray`,
+  `Deal Image` stores `Deal Image`. 26.11.13 read it as the destination and rejected 228 of 287
+  sampled links; 26.11.14 stopped using it. It looks like a URL only when the anchor text *is* one.
+  Note `URLSearchParams.get("trd")` returns it with the `+` separators as spaces.
+- **`data-product-exitwebsite` is the destination host**, stated bare on the anchor (`rei.com`,
+  `amazon.com`). This is what `isDestinationPlausible()` compares against. Sampled over 287 links on
+  25 threads: hostname-shaped every time, 15 distinct hosts, never a merchant name. Written
+  `data-product-exitWebsite` in the markup, so the dataset key is `productExitwebsite`. About one
+  anchor in ten omits it, and those pass through unchecked.
 - **`SETTINGS(id, null)` deletes**, but only for link-cache ids (`/^\d/`). Settings are unaffected —
   `css` is legitimately stored as null and goes through `settings.set()` directly.
 - **`Map` eviction is FIFO, not LRU.** Re-setting an existing key does not move it.
@@ -359,8 +399,9 @@ None of these is a defect; all are known and deliberate.
 | Classic menu mounts on `window load` | Appears late on slow pages. The `document-start` call runs before any bar exists. |
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
-| **Colour-variant deal-body links stopped resolving in 26.11.13** | Open regression. `trd` appears to carry the *anchor text*, not the destination, so links labelled `Dark Gray`/`Khaki`/etc. are rejected by the host check. Repair options and the one-step confirmation are in `HANDOFF.md`. |
-| `isDestinationPlausible()` could reject a good answer | Only if the resolver returns a *different host* from the one `trd` recorded, which was not observed. The failure is graceful — the link keeps its original href and stays `notResolved` — and visible: tick Debug and look for "destination discarded". If those appear on links that used to resolve correctly, the host comparison is too strict. |
+| ~~Colour-variant deal-body links stopped resolving in 26.11.13~~ | **Fixed in 26.11.14.** Confirmed `trd` carries the anchor text; the check now reads `data-product-exitwebsite`. All 7 colour variants resolve to their own ASINs again. |
+| `isDestinationPlausible()` rejects an affiliate hop on an unrelated domain | Observed once in 31 sampled links: a `timex.com` link resolves to `track.flexlinkspro.com` and is held back. A hop onto a *subdomain* of the stated host (`go.loaded.com` for `loaded.com`) is allowed. The failure is graceful — the link keeps its original href, still reaches the right page, and only loses the unwrap — and visible: tick Debug and look for "destination discarded". Fixing it properly means an allowlist of affiliate networks, or the perturbed-`lno` retry below. |
+| **The REI post link still does not unwrap** | Its id collides with other posts' first links and the server serves a cached `amazon.com` for it, which the check correctly rejects. The link works and reaches rei.com; it just keeps the referral hop. A fix exists — resubmit with a perturbed `lno` so the server resolves fresh (measured to return the correct URL) — but it writes a junk entry into V@no's cache for every link it is used on, so it was not adopted without his input. |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 
 ---
@@ -381,18 +422,23 @@ so this would fill in exactly the links it leaves bare — and would show the tr
 than the one their template asserts. This is also the natural use for `.tracked`: mark the links we
 could not unwrap.
 
-**Validate destinations against `data-product-exitwebsite` instead of `trd`.** Slickdeals states the
-destination host directly on the anchor: the reported REI link carried
-`data-product-exitwebsite="rei.com"` alongside `data-cta="outclick"` and
-`data-outclick-typeofoutclick="Post Content Link"`. That is exact, where `trd` is truncated at 32
-characters and forces `isDestinationPlausible()` to compare its final token as a prefix — the
-fuzziest part of the check and the most likely source of a false rejection. Not adopted yet on one
-observation: if the attribute is ever a merchant *name* (`REI`) rather than a host, a host comparison
-against it would reject correct answers everywhere. Worth switching to — preferring the attribute and
-keeping `trd` as the fallback — once it has been sampled across a few hundred links on several page
-types. Confirmed at the same time: the full destination is **not** recoverable locally. The only
+**~~Validate destinations against `data-product-exitwebsite` instead of `trd`.~~** Done in 26.11.14.
+Sampled first, as the entry asked: 287 links over 25 threads, hostname-shaped every time across 15
+distinct hosts, never a merchant name. `trd` was dropped rather than kept as a fallback — it carries
+the anchor text, so falling back to it would reintroduce the false rejections being repaired.
+Confirmed at the same time: the full destination is **not** recoverable from the page. The only
 `rei.com` URL in the post's markup is the abridged link *text*
 (`https://www.rei.com/learn/expert-...ction.html`), so the resolver remains the only source.
+
+**Retry a rejected link under a perturbed `lno`.** The one repair that would make the REI link
+unwrap. The server resolves an id it has no record for (measured: `19854408sdtid999lno` returns the
+correct rei.com URL where `19854408sdtid1lno` returns the cached amazon.com one), and the id has to
+agree with the submitted URL, so `lno` must be perturbed in both. Scoped to links the plausibility
+check has already rejected it would cost one extra request on roughly 1-8% of links and would fix
+the affiliate-redirector false rejection too, since a freshly resolved answer cannot be a collision.
+Held back because it writes an entry into V@no's cache under a key his own scheme would never
+generate. Worth raising with him upstream before shipping — the collision is his bug to fix, and
+`lno` restarting per post is the root cause.
 
 **Local price history.** Store `{dealId: [{price, date}]}` alongside the link cache and flag a card
 when the same item was posted cheaper before. Entirely local. "Is this actually a good price" is the
