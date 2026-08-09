@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.15** |
+| Current | **v26.11.16** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -73,7 +73,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.12 | [#36](https://github.com/maxnl/slickdealsPlus/pull/36) | Resolver console flood silenced; failed-group leak closed |
 | 26.11.13 | — | **Post links no longer resolve to the deal's own destination** |
 | 26.11.14 | [#40](https://github.com/maxnl/slickdealsPlus/pull/40) | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
-| 26.11.15 | — | Post-content links are asked under an id of their own from the start |
+| 26.11.15 | [#41](https://github.com/maxnl/slickdealsPlus/pull/41) | Post-content links are asked under an id of their own from the start |
+| 26.11.16 | — | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
 
 ---
 
@@ -317,6 +318,21 @@ The failure is the same shape as #1, committed in the same breath as a warning a
 that would have caught it: find the case that tells your explanation apart from its rival, and test
 *that* one.
 
+**Skipping a check also skips its cleanup** (26.11.15 -> 26.11.16). 26.11.15 stopped checking a
+cached destination for links asked under an id of their own, which is right on its own terms: such an
+answer was resolved for that exact URL and cannot belong to another link. What it missed is that the
+same check was doing a second job - deleting wrong destinations cached by *earlier* versions, which
+were written from the shared id and can be collisions. Those are post-content links, exactly the ones
+most likely to hold a wrong answer, and the guard silenced their cleanup. A destination cached before
+26.11.15 would have been handed out for as long as the entry survived, with no way to notice.
+
+Found by reading the shipped diff rather than from a symptom, and only because the comment directly
+above the guard still said what the check was for: "can be an id collision that was written before
+this check existed, so drop it rather than keep handing it out". The fix is a one-off `links.clear()`
+in the version-upgrade block, since nothing records which id an entry came from. The general shape:
+before narrowing a condition, check what else depends on it running - a guard that is correct for
+the case you are thinking about can disable a case you are not.
+
 **A collision-free cache key does not make the answer right** (26.11.13). #24 established that
 `getUrlId()` must keep upstream's shape and that collision-freedom belongs in `getCacheKey()`. That
 is still true, and it is still not enough: keying the *cache* per link stops one link inheriting
@@ -417,9 +433,16 @@ was one of these five.
   keeps the most recently *added* entries; evicting those instead would be strictly worse. LRU -
   keeping the most recently *used* - only changes anything once the cap is reached, and it is not:
   an organically grown cache reached 566 entries against a 3000 cap.
+- **`LINKS_MAX` is 5000**, raised from 3000 in 26.11.16. It was introduced at 3000 in v26.10.2
+  ("Cap the link cache instead of waiting for a quota failure") and has never been lowered - the only
+  changes to it or the eviction loop are that commit and the raise. Raising it further is the cheaper
+  first move if the cache is ever pinned at the cap, but around 6000 (~2.3MB) is the sensible
+  ceiling: 10,000 would be ~3.8MB, too close to a 5MB quota shared with the settings blob and
+  slickdeals.net's own storage, and the failure mode above it is not a clean refusal - it is
+  `settingsSave()` evicting in a loop to make each write fit.
 - **Cache sizing, measured** (26.11.15): destinations run 59-321 characters, mean 181; with a
   13-character key and JSON punctuation an entry costs about 200 characters. localStorage is
-  accounted in UTF-16 code units, so ~1.14MB at the 3000 cap and ~0.22MB at the 566 seen in
+  accounted in UTF-16 code units, so ~2.0MB at the 5000 cap and ~0.22MB at the 566 seen in
   practice, against a typical 5MB origin quota shared with the settings blob and slickdeals.net's
   own storage. The earlier 100-150 character estimate was low.
 - **`URLSearchParams.get()` already percent-decodes.** Do not wrap it in `decodeURIComponent`.
