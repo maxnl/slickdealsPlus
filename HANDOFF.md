@@ -36,8 +36,22 @@ from the modified URL, and the service resolves it on demand.
 19854408sdtid1433451321lno  -> rei.com/learn/expert-advice/...     (fresh, right)
 ```
 
-Fixture thread: 13 of 13 links unwrap. A 23-link sample across 9 previously unvisited threads
-unwrapped 23. The cache key is stable per link, so repeat visits reuse the entry.
+Ambiguity is also predicted rather than discovered: `lno` present with `pno` absent means a
+post-content link, whose index restarts in every post, so `resolverRequest()` sends those to a unique
+id from the start. Such a link costs one request instead of two and never more than one. Deal-body
+links carry `pno`, are unique already, and keep asking under upstream's id and its shared cache.
+
+An answer to a unique id is **not** put through `isDestinationPlausible()`. The check catches answers
+belonging to a different link sharing an id, and an answer resolved for this exact URL cannot be one.
+Checking it anyway rejects real affiliate hops - a `timex.com` link genuinely resolves to
+`www.flexoffers.com`. Both paths follow that rule; an earlier draft trusted an answer by one route
+and rejected the identical answer by the other.
+
+Fixture thread: 13 of 13 links unwrap, in 13 requests rather than 14. A 23-link sample across 9
+previously unvisited threads unwrapped 23. Over 26 post-content links the unique id returned an
+equivalent or better destination every time and never failed where the shared id succeeded. The cache
+key is a deterministic crc32, so the unique id is stable per link and identical for every user of
+this fork, and the shared cache still works.
 
 ---
 

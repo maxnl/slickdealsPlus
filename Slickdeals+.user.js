@@ -2073,14 +2073,19 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		resolveUrl(id, elLink._hrefOrig)
+		/* Which id to ask under. A link whose id is ambiguous by construction is
+		 * asked uniquely from the start rather than being asked, disbelieved and
+		 * asked again - see resolverRequest(). */
+		const request = resolverRequest(urlObject, key, id);
+
+		resolveUrl(request.id, request.url)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
-					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + id + " original:" + elLink._hrefOrig*/);
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + request.id + " original:" + request.url*/);
 
 				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(id);
+				const k = new TextEncoder().encode(request.id);
 				const r = new Uint8Array(response.length)
 					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
 
@@ -2101,12 +2106,20 @@ const processLinks = (node, force) =>
 					 * If the retry comes back empty the link keeps its original
 					 * href and stays notResolved, which is what it would do if the
 					 * service had no answer at all. */
-					if (!isDestinationPlausible(elLink, response))
+					/* The check exists to catch one thing: an answer that belongs to
+					 * a different link sharing this one's id. An answer to a unique
+					 * id cannot be that - it was resolved for this exact URL - so it
+					 * is not checked at all, the same reasoning that lets the retry
+					 * below apply its answer unexamined. Checking it anyway would
+					 * reject legitimate affiliate hops onto unrelated domains, which
+					 * is precisely the check's known false positive: a timex.com
+					 * link genuinely resolves to www.flexoffers.com. */
+					if (!request.unique && !isDestinationPlausible(elLink, response))
 					{
 						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
 							"color:red",
 							"color:#656",
-							id,
+							request.id,
 							elLink._hrefOrig,
 							response
 						);
@@ -2118,7 +2131,7 @@ const processLinks = (node, force) =>
 							debug(debugPrefix + "%cresolved again under a fresh id",
 								"color:green",
 								"color:#656",
-								id,
+								request.id,
 								elLink._hrefOrig,
 								fresh
 							);
@@ -2179,7 +2192,7 @@ const processLinks = (node, force) =>
 					"color:red",
 					"color:#656",
 					error,
-					id,
+					request.id,
 					elLink._hrefOrig
 				);
 			});
@@ -2336,19 +2349,75 @@ const decodeResolved = (id, response) =>
  * @param {string} key - This link's cache key, used as the replacement index.
  * @returns {Promise<string>} the destination, or "" if it could not be had
  */
-const resolveFresh = (urlObject, key) =>
+const uniqueRequest = (urlObject, key) =>
 {
 	const urlFresh = new URL(urlObject);
 	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
-	const idFresh = getUrlId(urlFresh);
+	const id = getUrlId(urlFresh);
 	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
 	 * link. The service does not recognise those - a crc id 404s - so there is
-	 * nothing to be gained by asking, and the link keeps the answer it had. */
-	if (!idFresh || /crc$/.test(idFresh))
+	 * nothing to be gained by asking under one. */
+	return id && !/crc$/.test(id) ? {id: id, url: urlFresh.href} : undefined;
+};
+
+/**
+ * Chooses the id a link is asked under.
+ *
+ * A link carrying `lno` but no `pno` is a post-content link, and `lno` is the
+ * index within a post, so it restarts at 1 in every post: the first link of
+ * every post in a thread derives one id and the service answers all of them
+ * with whichever destination was recorded first. That is knowable from the
+ * link alone, before anything is asked, so those go straight to a unique id
+ * instead of spending a request on an answer that cannot be trusted and then
+ * spending a second one to repair it.
+ *
+ * Deal-body links carry `pno`, which makes their ids unique already - all seven
+ * colour variants of the fixture thread always resolved correctly - so they
+ * keep asking under upstream's id and keep the benefit of the shared cache.
+ *
+ * Ambiguous is not the same as wrong: a post link whose destination happens to
+ * be the one recorded resolves correctly under either id. Asking under the
+ * unique id is still the better trade, because it costs one request rather than
+ * two whenever the answer would have been wrong, and never costs more than one.
+ * The replacement index is this link's cache key, a deterministic crc32, so the
+ * id is stable per link and shared by every user of this fork rather than
+ * minting a fresh server-side entry per visit.
+ * @function
+ * @param {URL} urlObject - The link being resolved.
+ * @param {string} key - This link's cache key.
+ * @param {string} id - The id upstream's scheme derives for this link.
+ * @returns {Object} `id` and `url` to ask with, and whether that id is unique
+ */
+const resolverRequest = (urlObject, key, id) =>
+{
+	const queryObject = new URLSearchParams(urlObject.search);
+	if (!queryObject.has("lno") || queryObject.has("pno"))
+		return {id: id, url: urlObject.href, unique: false};
+
+	const fresh = uniqueRequest(urlObject, key);
+	if (!fresh)
+		return {id: id, url: urlObject.href, unique: false};
+
+	return {id: fresh.id, url: fresh.url, unique: true};
+};
+
+/**
+ * Asks the resolver again under an id it cannot already hold an answer for,
+ * after an answer has been rejected. See resolverRequest() for the ids that
+ * skip this by being asked uniquely in the first place.
+ * @function
+ * @param {URL} urlObject - The original link.
+ * @param {string} key - This link's cache key, used as the replacement index.
+ * @returns {Promise<string>} the destination, or "" if it could not be had
+ */
+const resolveFresh = (urlObject, key) =>
+{
+	const fresh = uniqueRequest(urlObject, key);
+	if (!fresh)
 		return Promise.resolve("");
 
-	return resolveUrl(idFresh, urlFresh.href)
-		.then(response => decodeResolved(idFresh, response))
+	return resolveUrl(fresh.id, fresh.url)
+		.then(response => decodeResolved(fresh.id, response))
 		.catch(() => "");
 };
 
