@@ -199,14 +199,23 @@ Deal-body links carry `pno`, are unique already, and keep asking under upstream'
 
 **An answer to a unique id is not checked at all.** The check exists to catch one thing - an answer
 belonging to a different link that shares this one's id - and an answer resolved for this exact URL
-cannot be that. Checking it anyway would reject legitimate affiliate hops: a `timex.com` link really
-does resolve to `www.flexoffers.com`. This is the same reasoning that lets the retry apply its answer
-unexamined, and applying it to both paths is what keeps them consistent - the first draft of this
-change trusted an answer arriving by one route and rejected the identical answer arriving by the
-other.
+cannot be that. This is the same reasoning that lets the retry apply its answer unexamined, and
+applying it to both paths is what keeps them consistent: the first draft of this change trusted an
+answer arriving by one route and rejected the identical answer arriving by the other.
 
-Measured over 26 post-content links: the unique id returned an equivalent or better destination every
-time, and never failed where the shared id succeeded.
+**The service resolves from `u3`, and `u3` is not the same outside a browser.** A signed-out `curl`
+fetch of a page yields links whose `u3` encodes a different destination from the one a real session
+gets. The same `timex.com` link answered `www.flexoffers.com` for a curl-fetched URL and the true
+`timex.com` product URL - `?cjdata=…&utm_campaign=…FlexOffers.com` - in a browser with the link cache
+cleared. Both answers are honest replies to different questions.
+
+This invalidates measurements taken here from outside a browser, including the claim recorded in an
+earlier draft that the host check has a "known false positive" on affiliate hops. It does not, on the
+evidence available: in a real session that link resolves to the host the anchor states. The
+comparison of shared against unique ids over 26 post-content links was apples-to-apples (both used
+the same `u3`), but its absolute destinations describe the fetch and not the link, so it cannot rule
+out the shared id being better in a real session. **Verify from a browser before trusting anything in
+this section.**
 
 **Failure handling** (#36). The promise chain ended in `.catch(console.error)`, so every unresolvable
 link printed a red stack trace; a page carries hundreds. Now routed through `debug()`. The group
