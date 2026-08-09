@@ -1961,6 +1961,12 @@ const processLinks = (node, force) =>
 			continue;
 
 		const key = getCacheKey(urlObject);
+		/* Which id this link is asked under. Decided here rather than at the
+		 * request below because the cached-destination check needs it too: a
+		 * destination obtained from a unique id is not checked when it arrives,
+		 * so checking it on the way back out of the cache would delete it on the
+		 * next page load and ask for it again, every load, forever. */
+		const request = resolverRequest(urlObject, key, id);
 		const queryObject = new URLSearchParams(urlObject.search);
 		if (!elLink._elHover)
 		{
@@ -2026,8 +2032,15 @@ const processLinks = (node, force) =>
 			 * it against and nothing to gain by trying. A cached one came from the
 			 * resolver and can be an id collision that was written before this
 			 * check existed, so drop it rather than keep handing it out - leaving
-			 * it in place would keep the wrong destination on this link forever. */
-			if (!isLocal && !isDestinationPlausible(elLink, url))
+			 * it in place would keep the wrong destination on this link forever.
+			 *
+			 * Unless this link is asked under an id of its own, in which case what
+			 * is cached was resolved for this exact URL and cannot be another
+			 * link's destination. It was applied unchecked, so it has to be read
+			 * back unchecked: checking only on the way out would discard it on the
+			 * next page load, re-request it, apply the same answer again and cache
+			 * it again - once per page load, indefinitely. */
+			if (!isLocal && !request.unique && !isDestinationPlausible(elLink, url))
 			{
 				debug(debugPrefix + "%ccached destination discarded, wrong site for this link",
 					"color:red",
@@ -2073,11 +2086,6 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		/* Which id to ask under. A link whose id is ambiguous by construction is
-		 * asked uniquely from the start rather than being asked, disbelieved and
-		 * asked again - see resolverRequest(). */
-		const request = resolverRequest(urlObject, key, id);
-
 		resolveUrl(request.id, request.url)
 			.then(response =>
 			{
