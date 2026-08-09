@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.16** |
+| Current | **v26.11.17** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -74,7 +74,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.13 | — | **Post links no longer resolve to the deal's own destination** |
 | 26.11.14 | [#40](https://github.com/maxnl/slickdealsPlus/pull/40) | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
 | 26.11.15 | [#41](https://github.com/maxnl/slickdealsPlus/pull/41) | Post-content links are asked under an id of their own from the start |
-| 26.11.16 | — | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
+| 26.11.16 | [#42](https://github.com/maxnl/slickdealsPlus/pull/42) | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
+| 26.11.17 | — | Shared-id requests send the link's own href again (no behaviour change) |
 
 ---
 
