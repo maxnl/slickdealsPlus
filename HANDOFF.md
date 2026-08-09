@@ -75,10 +75,15 @@ same requests as multiplexed streams over one HTTP/2 connection and may not trip
 Per §2, measure from a browser first. Failure is graceful and self-healing either way: an unresolved
 link is never cached, so the next page load retries it.
 
-**Quick View links are unsampled.** Listing pages carry no `/click` links until a card is expanded,
-and `slickdeals.net` resets headless Chromium, so that path was never exercised. If anything
-misbehaves, look here first. Note the check is inert until a card is expanded — the homepage serves
-zero `/click` links and zero `data-product-exitWebsite` attributes.
+**~~Quick View links are unsampled.~~ Confirmed working in a browser.** Expanding a card on a listing
+page shows its links blue (`notResolved`, original href) and then green (`resolved`, unwrapped) a
+moment later, which is the whole path working end to end - the MutationObserver picking up the
+injected markup, `processLinks()` running on it, and `linkUpdate()` swapping the href. Nothing here
+could be sampled from outside a browser: listing pages carry no `/click` links until a card is
+expanded, and `slickdeals.net` resets headless Chromium.
+
+That blue-then-green transition is also the quickest visual check that link resolution is alive at
+all - no console needed. A link that stays blue is one that never resolved.
 
 **Possible free extra hop, unverified.** A `track.flexlinkspro.com` destination carried the full
 final URL in its own `url=` parameter, extractable locally with no request, exactly like `u2`. Found

@@ -198,9 +198,13 @@ restarts in every post. `resolverRequest()` sends those to a unique id from the 
 whose answer would have been wrong costs one request rather than two, and never costs more than one.
 Deal-body links carry `pno`, are unique already, and keep asking under upstream's id.
 
-**An answer to a unique id is not checked at all.** The check exists to catch one thing - an answer
-belonging to a different link that shares this one's id - and an answer resolved for this exact URL
-cannot be that. This is the same reasoning that lets the retry apply its answer unexamined, and
+**An answer to a unique id is not checked at all - on either path.** The check exists to catch one
+thing, an answer belonging to a different link that shares this one's id, and an answer resolved for
+this exact URL cannot be that. This has to hold for the cache as well as for a fresh answer:
+`resolverRequest()` is therefore called before the cached-destination branch, not just before the
+request. Checking only on the way out of the cache would discard a destination that was applied
+unchecked when it arrived, re-request it, apply the same answer again and cache it again - once per
+page load, indefinitely. This is the same reasoning that lets the retry apply its answer unexamined, and
 applying it to both paths is what keeps them consistent: the first draft of this change trusted an
 answer arriving by one route and rejected the identical answer arriving by the other.
 
@@ -449,6 +453,7 @@ None of these is a defect; all are known and deliberate.
 | ~~`isDestinationPlausible()` rejects an affiliate hop on an unrelated domain~~ | **No longer holds a link back.** A `timex.com` link really does resolve to `www.flexoffers.com`; verified end-to-end on both id shapes, it now unwraps either by skipping the check (unique id) or by being retried and applied (shared id). Note the unwrap is of limited use on such links - the destination is itself a redirector that forwards on to the merchant. |
 | An unwrapped destination can be an affiliate redirector | `flexoffers.com`, `go.loaded.com`, `goto.walmart.com`. Unwrapping removes the Slickdeals hop, not every hop. Nothing to fix - it is the genuine destination - but it is why a `.tracked`-style badge showing the real host would be worth more than it first appears. **Do not try to resolve one of these through the service**: it derives the id from the URL submitted and requires it to match the id in the path, and a non-Slickdeals URL derives no id at all, so every such request is refused with 404 / error `7.122`. Measured on the `flexoffers.com` destination above under three different ids. `getUrlId()` returns `false` for those hostnames anyway, so the script never asks. Following the hop would mean fetching the redirect ourselves, which registers an affiliate click - see the note against the `/click` 302 in `HANDOFF.md`. |
 | ~~The REI post link does not unwrap~~ | **Fixed in 26.11.14** by the unique-id retry. Fixture thread now unwraps 13 of 13. |
+| Quick View links resolve correctly | Confirmed in a browser: expanding a listing card shows links blue then green moments later, i.e. injected markup is picked up by the MutationObserver, processed and unwrapped. This path cannot be sampled offline - listing pages carry no `/click` links until a card is expanded - so the browser check is the only evidence there is, and it is positive. |
 | The resolver is asked with unbounded concurrency | `processLinks()` fires every link's request at once. Measured over separate connections the service serves roughly 4 at a time; a browser's single multiplexed connection may behave differently, and that has not been measured. Failure is graceful and self-healing — an unresolved link is never cached, so the next page load retries it — so this costs unresolved links on one pageview, not correctness. See [suggested enhancements](#suggested-enhancements). |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 
