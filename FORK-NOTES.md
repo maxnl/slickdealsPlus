@@ -87,11 +87,35 @@ important structural change, and getting it wrong broke every link.
   make it collision-free, and every lookup started returning 404.
 - `getCacheKey()` is ours: a crc32 of the path plus query with per-pageview parameters
   (`u3`, `adobeRef`, `peid`, `hash`, `auuid`, `sdtrk`) stripped and the rest sorted. Unique per link,
-  stable across page loads.
+  stable across page loads. Correction (26.11.13): `u3` is **not** per-pageview - it is byte-identical
+  across captures 40 minutes apart. Stripping it stays harmless, since over-stripping only merges
+  links that share a destination, but the source comment calling it volatile is wrong.
 
 Why both are needed: `lno` is the link index *within a post*, so it restarts at 1 in every post and
 the first link of every post in a thread shares an id. Using the resolver id as the cache key made
 links inherit whichever destination happened to resolve first (#1, #15).
+
+**What the resolver actually is** (26.11.13, measured). The endpoint is
+`[resolver host redacted - assembled at runtime, see the encoded string at the foot of the script]` - V@no's own host, decoded from the obfuscated argument at the
+foot of the script, not a Slickdeals service. It is a **lookup table keyed by the id**, and it does
+not read the URL in the request body. Asked twice about the same link:
+
+```
+19854408sdtid1lno  -> 200, 194 bytes -> https://www.amazon.com/gp/product/B0GTNLL1H8/...
+340707555crc       -> 404, error 7.122
+```
+
+An id it does not know 404s rather than being answered from the URL supplied, reproducing #24's
+measurement on a second independent link. **No client-side id scheme can fix a wrong destination**:
+the only id the server answers is the ambiguous one. Filtering the answer is the sole remedy
+available. The wrong destination is served rather than cached locally - with `slickdeals+links`
+deleted the link resolved off the wire byte-identical, `ascsubtag` from an unrelated pageview
+included, so the server is replaying another user's recorded destination for the shared id.
+
+`u3` decodes (base64url) to 88 bytes of high-entropy data that neither the resolver's own unmasking
+scheme nor any obvious key turns into a URL - presumably encrypted with a server-side key, which is
+why a resolver service exists at all. With `trd` cut at 32 characters and the anchor text abridged in
+the middle, **the full destination is not recoverable locally.**
 
 **Unwrapping and resolving are separate settings** (#13). Reading a destination out of a link's own
 `u2` parameter is free and entirely local; asking the service costs a request and sends the link and
@@ -198,6 +222,16 @@ folded in. Safe because `settingsInit()` has always iterated `defaultSettings` r
 stored data, so the startup path never had the problem, and the guard reuses the same `isLink`
 routing that already chose the storage Map — with all 17 settings keys beginning with a letter, no
 setting can fall on the link side of it.
+
+**A signal validated on one sample is not validated** (26.11.13 -> open). `isDestinationPlausible()`
+compares the resolved host against `trd`, and `trd` was read off exactly one link - a forum post whose
+anchor text *was* the URL. On that link, "trd is the sanitised destination URL" and "trd is the
+sanitised anchor text" produce byte-identical strings, so the sample could not discriminate between
+them. The deal body's colour-variant links do: their anchor text is `Dark Gray`, `Khaki`, `& More...`,
+`trd` follows it, and the host check rejects every one - they resolved correctly in 26.11.12 and stop
+resolving in 26.11.13. The failure is the same shape as #1, committed in the same breath as a warning
+about it. The rule that would have caught it: find the case that tells your explanation apart from
+its rival, and test *that* one. See `HANDOFF.md` for the repair options.
 
 **A collision-free cache key does not make the answer right** (26.11.13). #24 established that
 `getUrlId()` must keep upstream's shape and that collision-freedom belongs in `getCacheKey()`. That
@@ -325,6 +359,7 @@ None of these is a defect; all are known and deliberate.
 | Classic menu mounts on `window load` | Appears late on slow pages. The `document-start` call runs before any bar exists. |
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
+| **Colour-variant deal-body links stopped resolving in 26.11.13** | Open regression. `trd` appears to carry the *anchor text*, not the destination, so links labelled `Dark Gray`/`Khaki`/etc. are rejected by the host check. Repair options and the one-step confirmation are in `HANDOFF.md`. |
 | `isDestinationPlausible()` could reject a good answer | Only if the resolver returns a *different host* from the one `trd` recorded, which was not observed. The failure is graceful — the link keeps its original href and stays `notResolved` — and visible: tick Debug and look for "destination discarded". If those appear on links that used to resolve correctly, the host comparison is too strict. |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 
