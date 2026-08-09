@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.14
+// @version      26.11.15
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.14";
+const VERSION = "26.11.15";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.14";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! most links stopped resolving - the destination check compared the host against the link's text
-! links sharing a resolver id are asked again under one that is unique, instead of giving up`;
+const CHANGES = `* links inside forum posts get an id of their own from the start, so they resolve in one request instead of two
+# a link elsewhere still asks under the shared id, and is asked again only if the answer belongs to another link`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -55,16 +55,23 @@ const SETTINGS = (() =>
 	 * until recently. Capping on write is cheaper and more predictable than
 	 * relying on the failure path at all.
 	 *
-	 * Sizing: entries observed around 100-150 characters, and browsers account
-	 * localStorage in UTF-16 code units, so budget ~2 bytes per character - about
-	 * 900KB at this cap, against a typical 5MB origin quota shared with the
-	 * settings blob and whatever slickdeals.net itself stores. An organically
-	 * grown cache reached 566 entries, so this is generous.
+	 * Sizing, measured over 14 sampled destinations rather than estimated: URLs
+	 * run 59-321 characters, mean 181, and with a 13-character key plus JSON
+	 * punctuation an entry costs about 200. Browsers account localStorage in
+	 * UTF-16 code units, so budget ~2 bytes per character: about 1.14MB at this
+	 * cap, against a typical 5MB origin quota shared with the settings blob and
+	 * whatever slickdeals.net itself stores. An organically grown cache reached
+	 * 566 entries - roughly 0.22MB - so the cap is generous and, importantly,
+	 * is not normally reached at all.
 	 *
 	 * Eviction is FIFO, not LRU: Map preserves insertion order and re-setting an
 	 * existing key does not move it, so this drops first-seen rather than
-	 * least-recently-used. True LRU would cost a delete+set on every cache read,
-	 * which is not worth it for destinations that rarely change. */
+	 * least-recently-used. That still keeps the most recently *added* entries -
+	 * evicting those instead would be strictly worse. True LRU, keeping the most
+	 * recently *used*, would cost a delete+set on every cache read and only
+	 * changes which entries survive once the cap is hit. At 566 observed against
+	 * 3000 it is not hit, so LRU would be optimising a branch that does not run;
+	 * revisit only if the cap starts being reached. */
 	const LINKS_MAX = 3000;
 	// upgrade from v1.12
 	const oldData = localStorage.getItem("linksCache");
@@ -1961,6 +1968,12 @@ const processLinks = (node, force) =>
 			continue;
 
 		const key = getCacheKey(urlObject);
+		/* Which id this link is asked under. Decided here rather than at the
+		 * request below because the cached-destination check needs it too: a
+		 * destination obtained from a unique id is not checked when it arrives,
+		 * so checking it on the way back out of the cache would delete it on the
+		 * next page load and ask for it again, every load, forever. */
+		const request = resolverRequest(urlObject, key, id);
 		const queryObject = new URLSearchParams(urlObject.search);
 		if (!elLink._elHover)
 		{
@@ -2026,8 +2039,15 @@ const processLinks = (node, force) =>
 			 * it against and nothing to gain by trying. A cached one came from the
 			 * resolver and can be an id collision that was written before this
 			 * check existed, so drop it rather than keep handing it out - leaving
-			 * it in place would keep the wrong destination on this link forever. */
-			if (!isLocal && !isDestinationPlausible(elLink, url))
+			 * it in place would keep the wrong destination on this link forever.
+			 *
+			 * Unless this link is asked under an id of its own, in which case what
+			 * is cached was resolved for this exact URL and cannot be another
+			 * link's destination. It was applied unchecked, so it has to be read
+			 * back unchecked: checking only on the way out would discard it on the
+			 * next page load, re-request it, apply the same answer again and cache
+			 * it again - once per page load, indefinitely. */
+			if (!isLocal && !request.unique && !isDestinationPlausible(elLink, url))
 			{
 				debug(debugPrefix + "%ccached destination discarded, wrong site for this link",
 					"color:red",
@@ -2073,14 +2093,14 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		resolveUrl(id, elLink._hrefOrig)
+		resolveUrl(request.id, request.url)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
-					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + id + " original:" + elLink._hrefOrig*/);
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + request.id + " original:" + request.url*/);
 
 				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(id);
+				const k = new TextEncoder().encode(request.id);
 				const r = new Uint8Array(response.length)
 					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
 
@@ -2101,12 +2121,25 @@ const processLinks = (node, force) =>
 					 * If the retry comes back empty the link keeps its original
 					 * href and stays notResolved, which is what it would do if the
 					 * service had no answer at all. */
-					if (!isDestinationPlausible(elLink, response))
+					/* The check exists to catch one thing: an answer that belongs to
+					 * a different link sharing this one's id. An answer to a unique
+					 * id cannot be that - it was resolved for this exact URL - so it
+					 * is not checked at all, the same reasoning that lets the retry
+					 * below apply its answer unexamined.
+					 *
+					 * Do not reintroduce a check here on the strength of an answer
+					 * measured outside a browser. The service resolves from `u3`,
+					 * and `u3` differs between a signed-out fetch of a page and a
+					 * real session: the same timex.com link answered
+					 * www.flexoffers.com to a curl-fetched URL and the true
+					 * timex.com product URL to a browser's. Anything derived from
+					 * the former describes the fetch, not the link. */
+					if (!request.unique && !isDestinationPlausible(elLink, response))
 					{
 						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
 							"color:red",
 							"color:#656",
-							id,
+							request.id,
 							elLink._hrefOrig,
 							response
 						);
@@ -2118,7 +2151,7 @@ const processLinks = (node, force) =>
 							debug(debugPrefix + "%cresolved again under a fresh id",
 								"color:green",
 								"color:#656",
-								id,
+								request.id,
 								elLink._hrefOrig,
 								fresh
 							);
@@ -2179,7 +2212,7 @@ const processLinks = (node, force) =>
 					"color:red",
 					"color:#656",
 					error,
-					id,
+					request.id,
 					elLink._hrefOrig
 				);
 			});
@@ -2336,19 +2369,75 @@ const decodeResolved = (id, response) =>
  * @param {string} key - This link's cache key, used as the replacement index.
  * @returns {Promise<string>} the destination, or "" if it could not be had
  */
-const resolveFresh = (urlObject, key) =>
+const uniqueRequest = (urlObject, key) =>
 {
 	const urlFresh = new URL(urlObject);
 	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
-	const idFresh = getUrlId(urlFresh);
+	const id = getUrlId(urlFresh);
 	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
 	 * link. The service does not recognise those - a crc id 404s - so there is
-	 * nothing to be gained by asking, and the link keeps the answer it had. */
-	if (!idFresh || /crc$/.test(idFresh))
+	 * nothing to be gained by asking under one. */
+	return id && !/crc$/.test(id) ? {id: id, url: urlFresh.href} : undefined;
+};
+
+/**
+ * Chooses the id a link is asked under.
+ *
+ * A link carrying `lno` but no `pno` is a post-content link, and `lno` is the
+ * index within a post, so it restarts at 1 in every post: the first link of
+ * every post in a thread derives one id and the service answers all of them
+ * with whichever destination was recorded first. That is knowable from the
+ * link alone, before anything is asked, so those go straight to a unique id
+ * instead of spending a request on an answer that cannot be trusted and then
+ * spending a second one to repair it.
+ *
+ * Deal-body links carry `pno`, which makes their ids unique already - all seven
+ * colour variants of the fixture thread always resolved correctly - so they
+ * keep asking under upstream's id and keep the benefit of the shared cache.
+ *
+ * Ambiguous is not the same as wrong: a post link whose destination happens to
+ * be the one recorded resolves correctly under either id. Asking under the
+ * unique id is still the better trade, because it costs one request rather than
+ * two whenever the answer would have been wrong, and never costs more than one.
+ * The replacement index is this link's cache key, a deterministic crc32, so the
+ * id is stable per link and shared by every user of this fork rather than
+ * minting a fresh server-side entry per visit.
+ * @function
+ * @param {URL} urlObject - The link being resolved.
+ * @param {string} key - This link's cache key.
+ * @param {string} id - The id upstream's scheme derives for this link.
+ * @returns {Object} `id` and `url` to ask with, and whether that id is unique
+ */
+const resolverRequest = (urlObject, key, id) =>
+{
+	const queryObject = new URLSearchParams(urlObject.search);
+	if (!queryObject.has("lno") || queryObject.has("pno"))
+		return {id: id, url: urlObject.href, unique: false};
+
+	const fresh = uniqueRequest(urlObject, key);
+	if (!fresh)
+		return {id: id, url: urlObject.href, unique: false};
+
+	return {id: fresh.id, url: fresh.url, unique: true};
+};
+
+/**
+ * Asks the resolver again under an id it cannot already hold an answer for,
+ * after an answer has been rejected. See resolverRequest() for the ids that
+ * skip this by being asked uniquely in the first place.
+ * @function
+ * @param {URL} urlObject - The original link.
+ * @param {string} key - This link's cache key, used as the replacement index.
+ * @returns {Promise<string>} the destination, or "" if it could not be had
+ */
+const resolveFresh = (urlObject, key) =>
+{
+	const fresh = uniqueRequest(urlObject, key);
+	if (!fresh)
 		return Promise.resolve("");
 
-	return resolveUrl(idFresh, urlFresh.href)
-		.then(response => decodeResolved(idFresh, response))
+	return resolveUrl(fresh.id, fresh.url)
+		.then(response => decodeResolved(fresh.id, response))
 		.catch(() => "");
 };
 
