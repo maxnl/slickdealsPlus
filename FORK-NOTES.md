@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.15** |
+| Current | **v26.11.16** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -74,6 +74,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.13 | — | **Post links no longer resolve to the deal's own destination** |
 | 26.11.14 | [#40](https://github.com/maxnl/slickdealsPlus/pull/40) | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
 | 26.11.15 | [#41](https://github.com/maxnl/slickdealsPlus/pull/41) | Post-content links are asked under an id of their own from the start |
+| 26.11.16 | — | Link cache cap raised from 3000 to 5000 |
 
 ---
 
@@ -417,15 +418,16 @@ was one of these five.
   keeps the most recently *added* entries; evicting those instead would be strictly worse. LRU -
   keeping the most recently *used* - only changes anything once the cap is reached, and it is not:
   an organically grown cache reached 566 entries against a 3000 cap.
-- **`LINKS_MAX` has always been 3000** and has never been lowered. It was introduced in one commit
-  (v26.10.2, "Cap the link cache instead of waiting for a quota failure") and nothing has touched it
-  or the eviction loop since. If the cache ever does sit pinned at the cap, raising it is the cheaper
-  first move - a one-line change with no new failure modes. At ~200 characters an entry the practical
-  ceiling is around 6000 (~2.3MB); 10,000 would be ~3.8MB, too close to a 5MB quota shared with
-  other storage.
+- **`LINKS_MAX` is 5000**, raised from 3000 in 26.11.16. It was introduced at 3000 in v26.10.2
+  ("Cap the link cache instead of waiting for a quota failure") and has never been lowered - the only
+  changes to it or the eviction loop are that commit and the raise. Raising it further is the cheaper
+  first move if the cache is ever pinned at the cap, but around 6000 (~2.3MB) is the sensible
+  ceiling: 10,000 would be ~3.8MB, too close to a 5MB quota shared with the settings blob and
+  slickdeals.net's own storage, and the failure mode above it is not a clean refusal - it is
+  `settingsSave()` evicting in a loop to make each write fit.
 - **Cache sizing, measured** (26.11.15): destinations run 59-321 characters, mean 181; with a
   13-character key and JSON punctuation an entry costs about 200 characters. localStorage is
-  accounted in UTF-16 code units, so ~1.14MB at the 3000 cap and ~0.22MB at the 566 seen in
+  accounted in UTF-16 code units, so ~2.0MB at the 5000 cap and ~0.22MB at the 566 seen in
   practice, against a typical 5MB origin quota shared with the settings blob and slickdeals.net's
   own storage. The earlier 100-150 character estimate was low.
 - **`URLSearchParams.get()` already percent-decodes.** Do not wrap it in `decodeURIComponent`.
