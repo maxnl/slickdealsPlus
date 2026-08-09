@@ -1,172 +1,103 @@
 # Handoff — link resolution work
 
-Written at the end of the session that shipped **v26.11.13**. Read this with
+Written at the end of the session that shipped **v26.11.14**. Read this with
 [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable architecture notes; this file holds only
 what the next session needs to pick the work up, and should be deleted once the open item below is
 closed.
 
 ---
 
-## 1. Open regression — fix this first
+## 1. What 26.11.14 closed
 
-**Symptom.** In the deal body of
-[thread 19854408](https://slickdeals.net/f/19854408-prime-members-yaniky-upf-50-quick-dry-lightweight-running-baseball-cap-various-6-99-free-shipping),
-the colour-variant links (`Dark Gray`, `Khaki`, `Blue`, `Light Gray`, `Black`, `White`, `& More...`)
-each point at a different Amazon product. Under **26.11.12 they resolved correctly**, each to its own
-item. Under **26.11.13 they no longer resolve or unwrap** — they keep the full Slickdeals click-through
-with referral parameters intact.
+The 26.11.13 regression is fixed. `isDestinationPlausible()` compared the resolved host against
+`trd`, on the reading that `trd` held the sanitised destination URL. It does not — **`trd` is the
+link's own anchor text**, sanitised the same way. Confirmed by scanning the fixture thread's markup:
+`Dark Gray` stores `Dark+Gray`, `Deal Image` stores `Deal Image`, and the REI link stores
+`https www rei com learn expert c` only because its anchor text *is* a URL.
 
-**Cause — high confidence, not yet confirmed live.** `isDestinationPlausible()`, added in 26.11.13,
-compares the resolved destination's host against the link's `trd` parameter. It was validated against
-exactly one link, and that link was the one case where the two competing readings of `trd` cannot be
-told apart:
+The damage was larger than 26.11.13's notes recorded — not just the colour variants but **228 of 287
+links across 25 threads (79%)**, the `Get Deal at Amazon` button and every deal image included.
 
-| Reading of `trd` | On the REI post link | On a colour link |
-|---|---|---|
-| sanitised **destination URL**, cut at 32 chars | `https+www+rei+com+learn+expert+c` | `https+www+amazon+com+dp+B0…` → passes |
-| sanitised **anchor text**, cut at 32 chars | `https+www+rei+com+learn+expert+c` | `dark+gray` → **rejected** |
-
-They are identical on the REI link because its anchor text *is* the URL — Slickdeals rendered it as
-`https://www.rei.com/learn/expert-...ction.html`. Verified offline: both derivations produce the
-identical 32-character string. The colour links are the discriminating case, and their behaviour says
-`trd` follows the anchor text.
-
-**Confirm it in one step** (needs the allowed domains from §3, or run in a browser console on the deal
-page):
-
-```js
-for (const a of document.querySelectorAll('a[href*="/click?"], a.overlayUrl[href*="/click?"]'))
-	console.log(JSON.stringify((a.textContent || "").trim().slice(0, 40)),
-		"->", new URL(a.href, location).searchParams.get("trd"));
-```
-
-If `Dark Gray` prints `trd` = `Dark Gray`, the diagnosis is confirmed. Note the outer anchor's `href`
-is rewritten once resolved, so read `trd` from the `a.overlayUrl` child.
-
-**Recommended fix, in preference order.**
-
-1. **Switch to `data-product-exitwebsite`.** The anchor carries the destination host exactly —
-   `data-product-exitwebsite="rei.com"` was observed on the REI link, alongside `data-cta="outclick"`
-   and `data-outclick-typeofoutclick="Post Content Link"`. This is what `trd` was standing in for, and
-   it is not truncated. **Sample it across several hundred links on several page types before
-   trusting it** — if it is ever a merchant *name* (`REI`) rather than a host, a host comparison
-   against it fails everywhere, which is precisely the mistake being repaired here. The check would
-   need `isDestinationPlausible()` to take the anchor element, not just the URL.
-2. **Guard the existing `trd` check** so it only applies when `trd` begins with an `http`/`https`
-   token, treating anything else as "no destination recorded" and passing it through. Small and safe
-   under either reading of `trd`, but it only restores the colour links — it does not make the check
-   correct, and a link whose anchor text merely *looks* like a URL would still be checked against the
-   wrong string.
-3. **Revert `52d28fc` entirely** if the colour links matter more than the wrong-destination fix in the
-   meantime. That restores 26.11.12 behaviour: the REI link goes back to showing amazon.com, the
-   colour links work again.
-
-Whichever route, the mechanism this repairs is real and still there — see §2.
+The check now reads `data-product-exitwebsite`, the destination host Slickdeals states on the anchor.
+Sampled before adopting, as the old notes demanded: 287 links, 15 distinct hosts, hostname-shaped
+every time, never a merchant name. This alone took the fixture thread from 0 usable links to 12 of
+13, every colour variant to its own ASIN; the thirteenth is the rei.com link, which §2 closes.
 
 ---
 
-## 2. Established facts — do not re-derive these
+## 2. What 26.11.14 also shipped — the unique-id retry
 
-All measured live during the 26.11.13 session, on thread 19854408.
-
-**The resolver is a lookup table keyed by id, and it does not read the URL you send it.**
-Endpoint (decoded from the obfuscated argument at the foot of the script):
-
-```
-[resolver host redacted - assembled at runtime, see the encoded string at the foot of the script]          <- V@no's own host, not Slickdeals
-```
-
-Asked about the *same* REI link twice, from the page's own origin:
+The REI link now unwraps. A rejected answer is re-asked under an id the service cannot already hold
+an entry for: `resolveFresh()` replaces `lno` with the link's own cache key and re-derives the id
+from the modified URL, and the service resolves it on demand.
 
 ```
-19854408sdtid1lno  -> 200, 194 bytes -> https://www.amazon.com/gp/product/B0GTNLL1H8/...
-340707555crc       -> 404, error 7.122
+19854408sdtid1lno           -> amazon.com/gp/product/B0GTNLL1H8   (cached, wrong)
+19854408sdtid1433451321lno  -> rei.com/learn/expert-advice/...     (fresh, right)
 ```
 
-The request body carries `[linkUrl, pageUrl]` and is ignored: an id the server does not know 404s
-rather than being answered from the URL supplied. This reproduces #24's measurement on a second,
-independent link. **Consequence: no client-side id scheme can fix the wrong destination.** The only
-id the server answers is the ambiguous one, and its answer is wrong. Filtering the answer is the only
-available remedy — which is why 26.11.13 exists, and why the fix in §1 should repair the filter
-rather than remove it.
-
-**The wrong destination is served, not cached locally.** With `slickdeals+links` deleted and the page
-reloaded, the link resolved off the wire and returned byte-identical content including
-`ascsubtag=9e8da36a92d611f1…`, a tracking value minted in an unrelated pageview. The server is
-replaying another user's recorded destination for the shared id.
-
-**The id collision is upstream's own unfinished business.** The upstream commit whose entire changelog
-is `! resolved links are sometimes wrong` (24.10.30, `8df2f5b`) is the one that *added* `lno`:
-
-```
-before:  ["pno", "sdtid", "tid", "pcoid"]
-after:   ["pno", "sdtid", "tid", "pcoid", "lno"]
-```
-
-It only half-works: `lno` is the link index *within a post* and restarts at 1 in every post, so the
-first link of every post in a thread shares one id — `19854408sdtid1lno`.
-
-**`u3` is stable per link, not per pageview.** Byte-identical across two captures of the same link
-taken ~40 minutes apart, while `adobeRef` and `peid` both changed. `getCacheKey()` strips it as
-volatile; harmless, since over-stripping only merges links that share a destination, but the stated
-reason is wrong. It decodes (base64url) to 88 bytes of high-entropy data; neither the resolver's own
-unmasking scheme nor any obvious key yields a URL. Assume it is encrypted with a server-side key —
-almost certainly why a resolver service exists at all.
-
-**The full destination is not recoverable locally.** `trd` is cut at 32 characters, `u3` is encrypted,
-and the anchor text is abridged in the middle (`https://www.rei.com/learn/expert-...ction.html`). The
-beginning and the end are on the page; the middle is not.
+Fixture thread: 13 of 13 links unwrap. A 23-link sample across 9 previously unvisited threads
+unwrapped 23. The cache key is stable per link, so repeat visits reuse the entry.
 
 ---
 
-## 3. Environment
+## 3. Open item — the resolver is asked with unbounded concurrency
 
-This session ran with **Trusted** network access, which blocks both `slickdeals.net` and
-`slickdeals.net.vano.org` (`gateway answered 403 to CONNECT`), so every live probe had to be pasted
-into a browser console by hand. The new container should be configured with **Network access →
-Custom**:
+`processLinks()` fires `resolveUrl()` for every link in its loop with no `await` and no queue, so a
+thread with 47 resolvable links opens 47 simultaneous requests.
 
-```
-slickdeals.net
-slickdeals.net.vano.org
-```
+Measured over separate `curl` connections, the service serves roughly four at a time: 12 requests at
+concurrency 1 all succeeded, 8-plus in flight lost two thirds, while 30 sequential requests at 200ms
+spacing lost 2. That points at a small in-flight cap (4, say) as the fix.
 
-and **"Also include default list of common package managers" checked**, or npm/GitHub access is lost.
-With that, the probes in §1 and §2 can be run directly with `curl` instead of round-tripping through
-a human.
+**Measure it from a browser before building anything.** Those numbers come from separate TLS
+connections on a datacenter IP with no session cookies; a browser issues the same requests as
+multiplexed streams over one HTTP/2 connection and may not trip the limit at all. If it tripped this
+badly in practice, unresolved links would be the norm rather than the exception, which they are not.
 
-Note the resolver host is a subdomain of `vano.org` styled to read as `slickdeals.net`. Resolving
-sends the link URL and the current page URL there; `resolveLinks` governs it. `unwrapLinks` is purely
-local and sends nothing.
+The failure is graceful and self-healing either way — an unresolved link is never cached, so the next
+page load retries it — so this costs unresolved links on a single pageview, not correctness.
 
 ---
 
-## 4. Test fixtures
+## 4. Environment
 
-Thread: `https://slickdeals.net/f/19854408-…?v=1&page=2`
+This session had working network access to both `slickdeals.net` and `slickdeals.net.vano.org`, so
+every measurement above was taken directly with `curl` rather than pasted from a browser console. If
+a future container cannot reach them, set **Network access → Custom** with those two hosts and
+**"Also include default list of common package managers" checked**.
 
-The REI post link (page 2, ambiguous id, wrong answer):
+Two things that will otherwise waste a session:
 
-```
-https://slickdeals.net/click?adobeRef=…&sdtid=19854408&sdfpid=1311423&sdfid=9&lno=1
-  &trd=https+www+rei+com+learn+expert+c&pv=&au=&sdtrk=frontpage&u3=Mt7n5E8KXjxv…&peid=…
-```
+- **The resolver requires `Origin` and `Referer`.** Without them every request returns 404 / error
+  `1.30` regardless of the id, which reads exactly like the service being down.
+- **It rate-limits.** Sustained probing gets connection resets; ~1.8s between requests was stable.
 
-- resolver id: `19854408sdtid1lno` → answers `amazon.com/gp/product/B0GTNLL1H8`
-- unique-per-link crc id: `340707555crc` → 404 / `7.122`
-- anchor dataset: `productExitwebsite: 'rei.com'`, `cta: 'outclick'`,
-  `outclickTypeofoutclick: 'Post Content Link'`
-
-The colour-variant links live in the **deal body** of the same thread, anchor text `Dark Gray`,
-`Khaki`, etc., each a different Amazon product. These are the regression fixtures.
+`slickdeals.net` resets headless Chromium (bot protection), but serves `curl` with a browser
+user-agent. Deal listing pages are client-rendered: the homepage carries **no** `/click` links at
+all, and forum threads are where they live.
 
 ---
 
-## 5. Before you ship
+## 5. Test fixtures
+
+Thread: `https://slickdeals.net/f/19854408-…` — colour variants in the deal body on page 1, the REI
+post link on page 2. A single fetch of the base URL returns both.
+
+Ground truth for that thread, if you need to re-derive it: Slickdeals' own `/click` URL 302s straight
+to the destination, and for affiliate-wrapped links the `u=` parameter carries the full target. **Do
+not build this into the script** — every such request mints a fresh `ascsubtag` and registers as a
+click, so using it for resolution would generate phantom affiliate clicks on every page load. It is a
+diagnostic, not a mechanism.
+
+---
+
+## 6. Before you ship
 
 From `FORK-NOTES.md` — the ones this area keeps tripping over:
 
-- `getUrlId()` must keep upstream's exact shape. Redefining it 404s every lookup, silently.
+- `getUrlId()` must keep upstream's exact shape, **and** must keep agreeing with the URL that is
+  submitted alongside it. That second half is why the earlier collision-free attempt 404'd.
 - `VERSION` is a path segment in the resolver URL. Bump it; never change its shape. `@version` and
   `const VERSION` must agree or the release workflow fails.
 - The stylesheet is one template literal — no backtick or `${` anywhere in it, comments included.
@@ -174,4 +105,6 @@ From `FORK-NOTES.md` — the ones this area keeps tripping over:
 - `node --check 'Slickdeals+.user.js'` proves nothing about behaviour. Every regression in this
   repo's history passed it.
 - **The lesson this handoff exists to pass on:** a signal validated on one sample is not validated.
-  Find the case that discriminates between your explanation and its rival, and test *that*.
+  Find the case that discriminates between your explanation and its rival, and test *that*. Then
+  measure how far the problem actually reaches — 26.11.13 was reported as a handful of colour links
+  and was in fact four links in five.
