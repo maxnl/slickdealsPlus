@@ -34,7 +34,8 @@ const VERSION = "26.11.14";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! most links stopped resolving - the destination check compared the host against the link's text`;
+const CHANGES = `! most links stopped resolving - the destination check compared the host against the link's text
+! links sharing a resolver id are asked again under one that is unique, instead of giving up`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2091,10 +2092,15 @@ const processLinks = (node, force) =>
 						return;
 
 					/* The service answers an ambiguous id with one destination for
-					 * every link that shares it. Neither cache nor apply it when
-					 * the link itself says it goes somewhere else: the link keeps
-					 * its original href and stays notResolved, which is what it
-					 * would do if the service had no answer at all. */
+					 * every link that shares it. Rather than give up on the link,
+					 * ask again under an id that cannot already hold an answer -
+					 * see resolveFresh(), which the service resolves on demand.
+					 * Returning the promise keeps it inside this chain, so the
+					 * in-flight accounting in .finally() still runs exactly once.
+					 *
+					 * If the retry comes back empty the link keeps its original
+					 * href and stays notResolved, which is what it would do if the
+					 * service had no answer at all. */
 					if (!isDestinationPlausible(elLink, response))
 					{
 						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
@@ -2104,7 +2110,25 @@ const processLinks = (node, force) =>
 							elLink._hrefOrig,
 							response
 						);
-						return response;
+						return resolveFresh(urlObject, key).then(fresh =>
+						{
+							if (!fresh)
+								return response;
+
+							debug(debugPrefix + "%cresolved again under a fresh id",
+								"color:green",
+								"color:#656",
+								id,
+								elLink._hrefOrig,
+								fresh
+							);
+							SETTINGS(key, fresh);
+							for(let i = 0; i < aLinks.length; i++)
+								linkUpdate(aLinks[i], fresh);
+
+							aLinks.resolved = true;
+							return fresh;
+						});
 					}
 
 					SETTINGS(key, response);
@@ -2261,6 +2285,72 @@ const updateLinks = () =>
 const resolveUrl = (id, url) => fetch(api + VERSION + "/" + id, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
 	.catch(fVoid);
+
+/**
+ * Unmasks a resolver response. The body is XOR'd against the id it was asked
+ * for, so the id used here must be the one that was sent.
+ * @function
+ * @param {string} id - The id the response was requested under.
+ * @param {ArrayBuffer} response - The raw response body.
+ * @returns {string} the destination, or "" if there was nothing usable
+ */
+const decodeResolved = (id, response) =>
+{
+	if (!response || response instanceof Response || response.byteLength === 0)
+		return "";
+
+	const bytes = new Uint8Array(response);
+	const k = new TextEncoder().encode(id);
+	const r = new Uint8Array(bytes.length).map((_, i) => bytes[i] ^ bytes[i - 1] ^ k[i % k.length]);
+	const text = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
+	return /^https?:\/\//.test(text) ? text : "";
+};
+
+/**
+ * Asks the resolver again under an id it cannot already hold an answer for.
+ *
+ * The resolver caches by the id it is given, and `lno` - the link index within
+ * a post - restarts at 1 in every post, so the first link of every post in a
+ * thread is asked under one id (`19854408sdtid1lno`) and they all get back
+ * whichever destination was recorded first. That is why a post linking to
+ * rei.com resolves to the thread's own amazon.com product.
+ *
+ * The service is not only a cache, though: an id it holds no entry for is
+ * resolved on demand. Measured on the rei.com link, which the colliding id
+ * answers wrongly:
+ *
+ *     19854408sdtid1lno    -> https://www.amazon.com/gp/product/B0GTNLL1H8/...
+ *     19854408sdtid999lno  -> https://www.rei.com/learn/expert-advice/sun-protection.html
+ *
+ * So `lno` is replaced with this link's own cache key, which is unique per link
+ * and stable across page loads, and the id is re-derived from the modified URL.
+ * Both matter: the service checks that the id in the path agrees with the URL
+ * in the body and refuses the pair outright if it does not, which is what made
+ * an earlier collision-free getUrlId() 404 every lookup. `lno` is safe to
+ * change because the destination is carried in `u3`, not in the index.
+ *
+ * An answer that comes back from this cannot be a collision - it was resolved
+ * for this exact URL - so it is taken as authoritative and not re-checked.
+ * @function
+ * @param {URL} urlObject - The original link.
+ * @param {string} key - This link's cache key, used as the replacement index.
+ * @returns {Promise<string>} the destination, or "" if it could not be had
+ */
+const resolveFresh = (urlObject, key) =>
+{
+	const urlFresh = new URL(urlObject);
+	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
+	const idFresh = getUrlId(urlFresh);
+	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
+	 * link. The service does not recognise those - a crc id 404s - so there is
+	 * nothing to be gained by asking, and the link keeps the answer it had. */
+	if (!idFresh || /crc$/.test(idFresh))
+		return Promise.resolve("");
+
+	return resolveUrl(idFresh, urlFresh.href)
+		.then(response => decodeResolved(idFresh, response))
+		.catch(() => "");
+};
 
 /**
 * Extracts the ID and type of a deal from a given URL.
