@@ -184,12 +184,29 @@ for that exact link:
 ```
 
 Both halves are sent because the service checks that the id agrees with the URL. The cache key is
-stable per link, so a repeat visit reuses the entry rather than minting another. An answer that comes
-back cannot be a collision, so it is applied without re-checking - which also recovers the affiliate
-hop the host check would otherwise reject. Every failure path yields `""` and writes nothing:
-`decodeResolved()` rejects an absent body, a non-ok `Response`, an empty buffer and anything that
-does not decode to an `http(s)` URL. The retry is chained inside the existing promise so the
-in-flight accounting in `.finally()` still runs once per link.
+stable per link, so a repeat visit reuses the entry rather than minting another - and because it is a
+deterministic crc32, every user of this fork derives the same unique id, so the shared cache still
+does its job. Every failure path yields `""` and writes nothing: `decodeResolved()` rejects an absent
+body, a non-ok `Response`, an empty buffer and anything that does not decode to an `http(s)` URL. The
+retry is chained inside the existing promise so the in-flight accounting in `.finally()` still runs
+once per link.
+
+**An ambiguous id is recognised before it is asked** (26.11.14). Whether an id can collide is
+knowable from the link alone: `lno` present and `pno` absent means a post-content link, whose index
+restarts in every post. `resolverRequest()` sends those to a unique id from the start, so a link
+whose answer would have been wrong costs one request rather than two, and never costs more than one.
+Deal-body links carry `pno`, are unique already, and keep asking under upstream's id.
+
+**An answer to a unique id is not checked at all.** The check exists to catch one thing - an answer
+belonging to a different link that shares this one's id - and an answer resolved for this exact URL
+cannot be that. Checking it anyway would reject legitimate affiliate hops: a `timex.com` link really
+does resolve to `www.flexoffers.com`. This is the same reasoning that lets the retry apply its answer
+unexamined, and applying it to both paths is what keeps them consistent - the first draft of this
+change trusted an answer arriving by one route and rejected the identical answer arriving by the
+other.
+
+Measured over 26 post-content links: the unique id returned an equivalent or better destination every
+time, and never failed where the shared id succeeded.
 
 **Failure handling** (#36). The promise chain ended in `.catch(console.error)`, so every unresolvable
 link printed a red stack trace; a page carries hundreds. Now routed through `debug()`. The group
@@ -419,7 +436,8 @@ None of these is a defect; all are known and deliberate.
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
 | ~~Colour-variant deal-body links stopped resolving in 26.11.13~~ | **Fixed in 26.11.14.** Confirmed `trd` carries the anchor text; the check now reads `data-product-exitwebsite`. All 7 colour variants resolve to their own ASINs again. |
-| `isDestinationPlausible()` rejects an affiliate hop on an unrelated domain | Observed once in 31 sampled links: a `timex.com` link resolves to `track.flexlinkspro.com`. A hop onto a *subdomain* of the stated host (`go.loaded.com` for `loaded.com`) is allowed outright. Since 26.11.14 a rejected answer is re-asked under a unique id rather than dropped, and a freshly resolved answer is taken as authoritative, so this recovers instead of failing. Visible either way: tick Debug and look for "destination discarded" followed by "resolved again under a fresh id". |
+| ~~`isDestinationPlausible()` rejects an affiliate hop on an unrelated domain~~ | **No longer holds a link back.** A `timex.com` link really does resolve to `www.flexoffers.com`; verified end-to-end on both id shapes, it now unwraps either by skipping the check (unique id) or by being retried and applied (shared id). Note the unwrap is of limited use on such links - the destination is itself a redirector that forwards on to the merchant. |
+| An unwrapped destination can be an affiliate redirector | `flexoffers.com`, `go.loaded.com`, `goto.walmart.com`. Unwrapping removes the Slickdeals hop, not every hop. Nothing to fix - it is the genuine destination - but it is why a `.tracked`-style badge showing the real host would be worth more than it first appears. |
 | ~~The REI post link does not unwrap~~ | **Fixed in 26.11.14** by the unique-id retry. Fixture thread now unwraps 13 of 13. |
 | The resolver is asked with unbounded concurrency | `processLinks()` fires every link's request at once. Measured over separate connections the service serves roughly 4 at a time; a browser's single multiplexed connection may behave differently, and that has not been measured. Failure is graceful and self-healing — an unresolved link is never cached, so the next page load retries it — so this costs unresolved links on one pageview, not correctness. See [suggested enhancements](#suggested-enhancements). |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
