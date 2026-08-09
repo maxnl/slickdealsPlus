@@ -34,7 +34,8 @@ const VERSION = "26.11.13";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! links inside forum posts could resolve to the deal's own destination`;
+const CHANGES = `! links inside forum posts could resolve to the deal's own destination
+! every cached link left its cache key on <html> as a class`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -469,8 +470,6 @@ const SETTINGS = (() =>
 			if (!links.delete(id))
 				return false;
 
-			/* Kept in step with the toggle below, which every write performs. */
-			document.documentElement.classList.remove(id);
 			settingsSave();
 			return true;
 		}
@@ -483,7 +482,16 @@ const SETTINGS = (() =>
 		if (defaultSettings[id]?.onChange instanceof Function)
 			defaultSettings[id].onChange(value);
 
-		document.documentElement.classList.toggle(id, !!value);
+		/* Settings only. This ran for every id, so each resolved link left a
+		 * `0…crc` cache key on <html> as a class - one per link, for the life of
+		 * the page, nothing reading them. settingsInit() has always iterated
+		 * `defaultSettings` rather than the stored data, so the startup path
+		 * never had this problem and no setting depends on the link branch: the
+		 * test is the same `isLink` routing that chose `storageData` above, and
+		 * every settings key begins with a letter. */
+		if (storageData === settings)
+			document.documentElement.classList.toggle(id, !!value);
+
 		settingsSave();
 		return true;
 	};
