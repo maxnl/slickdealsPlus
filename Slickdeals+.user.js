@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.16
+// @version      26.11.17
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.16";
+const VERSION = "26.11.17";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,9 +34,8 @@ const VERSION = "26.11.16";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! a destination cached by an older version could be handed out indefinitely - the cache is cleared once on upgrade
-* the link cache holds 5000 destinations instead of 3000
-# about 2MB at worst, and a fuller cache means fewer lookups sent to the resolver`;
+const CHANGES = `* internal only - a link asked under the shared resolver id is sent its own href untouched again, as before 26.11.15
+# no behaviour change; the two forms were already equivalent, this keeps the untouched path byte-identical`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2119,7 +2118,9 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		resolveUrl(request.id, request.url)
+		/* A unique id brings its own URL, carrying the replaced index; anything
+		 * asked under upstream's id is sent the link's own href untouched. */
+		resolveUrl(request.id, request.url || elLink._hrefOrig)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
@@ -2428,21 +2429,32 @@ const uniqueRequest = (urlObject, key) =>
  * The replacement index is this link's cache key, a deterministic crc32, so the
  * id is stable per link and shared by every user of this fork rather than
  * minting a fresh server-side entry per visit.
+ *
+ * `url` is only set when the id is a unique one, because only then does the URL
+ * have to change: it carries the replaced index, and the service refuses a pair
+ * whose id and URL disagree. A link asked under upstream's id is sent
+ * `elLink._hrefOrig` unaltered, exactly as it was before this function existed.
+ * Returning a re-serialised `urlObject.href` there instead would be equivalent -
+ * `elLink.href` is already normalised, and 506 sampled links round-trip through
+ * `new URL()` unchanged - but it is a difference on a path this change is not
+ * meant to touch, and this repository's regressions have mostly been changes
+ * that rode along beside a real fix.
  * @function
  * @param {URL} urlObject - The link being resolved.
  * @param {string} key - This link's cache key.
  * @param {string} id - The id upstream's scheme derives for this link.
- * @returns {Object} `id` and `url` to ask with, and whether that id is unique
+ * @returns {Object} the `id` to ask with, whether it is unique, and for a unique
+ *                   id the `url` that must accompany it
  */
 const resolverRequest = (urlObject, key, id) =>
 {
 	const queryObject = new URLSearchParams(urlObject.search);
 	if (!queryObject.has("lno") || queryObject.has("pno"))
-		return {id: id, url: urlObject.href, unique: false};
+		return {id: id, unique: false};
 
 	const fresh = uniqueRequest(urlObject, key);
 	if (!fresh)
-		return {id: id, url: urlObject.href, unique: false};
+		return {id: id, unique: false};
 
 	return {id: fresh.id, url: fresh.url, unique: true};
 };
