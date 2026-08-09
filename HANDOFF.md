@@ -1,124 +1,142 @@
 # Handoff — link resolution work
 
-Written at the end of the session that shipped **v26.11.14**. Read this with
+Written at the end of the session that shipped **v26.11.14** (PR #40). Read this with
 [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable architecture notes; this file holds only
-what the next session needs to pick the work up, and should be deleted once the open item below is
+what the next session needs to pick the work up, and should be deleted once the open items below are
 closed.
 
 ---
 
-## 1. What 26.11.14 closed
+## 1. Where we stand
 
-The 26.11.13 regression is fixed. `isDestinationPlausible()` compared the resolved host against
-`trd`, on the reading that `trd` held the sanitised destination URL. It does not — **`trd` is the
-link's own anchor text**, sanitised the same way. Confirmed by scanning the fixture thread's markup:
-`Dark Gray` stores `Dark+Gray`, `Deal Image` stores `Deal Image`, and the REI link stores
-`https www rei com learn expert c` only because its anchor text *is* a URL.
+26.11.13 shipped a destination check that compared the resolved host against `trd`, believing `trd`
+held the sanitised outbound URL. **`trd` is the link's own anchor text.** `Dark Gray` stores
+`Dark+Gray`; the one link it was validated against happened to have a URL as its anchor text, which
+is the single case where both readings produce the same string.
 
-The damage was larger than 26.11.13's notes recorded — not just the colour variants but **228 of 287
-links across 25 threads (79%)**, the `Get Deal at Amazon` button and every deal image included.
+Measured rather than estimated: that check rejected **228 of 287 links across 25 threads — 79%**,
+the `Get Deal at Amazon` button and every deal image included. It was reported as "the colour
+variants stopped resolving"; it was closer to all link resolution stopping.
 
-The check now reads `data-product-exitwebsite`, the destination host Slickdeals states on the anchor.
-Sampled before adopting, as the old notes demanded: 287 links, 15 distinct hosts, hostname-shaped
-every time, never a merchant name. This alone took the fixture thread from 0 usable links to 12 of
-13, every colour variant to its own ASIN; the thirteenth is the rei.com link, which §2 closes.
+26.11.14 does three things:
 
----
+1. **Checks against `data-product-exitwebsite`**, the destination host Slickdeals states on the
+   anchor. Sampled before adopting: 287 links, 15 distinct hosts, hostname-shaped every time, never a
+   merchant name. `trd` is not kept as a fallback — it is a known-wrong signal.
+2. **Asks again under a unique id when an answer is rejected.** The service resolves any id it holds
+   no entry for, so `resolveFresh()` swaps `lno` for the link's cache key and re-derives the id.
+3. **Asks uniquely from the start when the id is ambiguous by construction** — `lno` present, `pno`
+   absent, i.e. a post-content link. One request instead of two, never more than one.
 
-## 2. What 26.11.14 also shipped — the unique-id retry
+An answer to a unique id is **not** put through the check: the check catches answers belonging to a
+different link sharing an id, and an answer resolved for this exact URL cannot be one.
 
-The REI link now unwraps. A rejected answer is re-asked under an id the service cannot already hold
-an entry for: `resolveFresh()` replaces `lno` with the link's own cache key and re-derives the id
-from the modified URL, and the service resolves it on demand.
-
-```
-19854408sdtid1lno           -> amazon.com/gp/product/B0GTNLL1H8   (cached, wrong)
-19854408sdtid1433451321lno  -> rei.com/learn/expert-advice/...     (fresh, right)
-```
-
-Ambiguity is also predicted rather than discovered: `lno` present with `pno` absent means a
-post-content link, whose index restarts in every post, so `resolverRequest()` sends those to a unique
-id from the start. Such a link costs one request instead of two and never more than one. Deal-body
-links carry `pno`, are unique already, and keep asking under upstream's id and its shared cache.
-
-An answer to a unique id is **not** put through `isDestinationPlausible()`. The check catches answers
-belonging to a different link sharing an id, and an answer resolved for this exact URL cannot be one.
-Checking it anyway rejects real affiliate hops - a `timex.com` link genuinely resolves to
-`www.flexoffers.com`. Both paths follow that rule; an earlier draft trusted an answer by one route
-and rejected the identical answer by the other.
-
-Fixture thread: 13 of 13 links unwrap, in 13 requests rather than 14. A 23-link sample across 9
-previously unvisited threads unwrapped 23. Over 26 post-content links the unique id returned an
-equivalent or better destination every time and never failed where the shared id succeeded. The cache
-key is a deterministic crc32, so the unique id is stable per link and identical for every user of
-this fork, and the shared cache still works.
+Fixture thread `19854408`: 13 of 13 links unwrap in 13 requests, every colour variant to its own
+ASIN, the rei.com post link included. Was 0 of 13 under 26.11.13.
 
 ---
 
-## 3. Open item — the resolver is asked with unbounded concurrency
+## 2. The most important thing learned — `u3`, and measuring from outside a browser
 
-`processLinks()` fires `resolveUrl()` for every link in its loop with no `await` and no queue, so a
-thread with 47 resolvable links opens 47 simultaneous requests.
+**The service resolves from `u3`, and `u3` is not the same outside a browser.** A signed-out `curl`
+fetch of a page yields links whose `u3` encodes a different destination from the one a real session
+gets. The same `timex.com` link answered `www.flexoffers.com` for a curl-fetched URL and the true
+`timex.com` product URL in a browser with the link cache cleared. Both are honest answers to
+different questions.
 
-Measured over separate `curl` connections, the service serves roughly four at a time: 12 requests at
-concurrency 1 all succeeded, 8-plus in flight lost two thirds, while 30 sequential requests at 200ms
-spacing lost 2. That points at a small in-flight cap (4, say) as the fix.
+This session's measurements were nearly all taken with `curl`. The structural ones held up when
+checked in a browser — `trd` being anchor text, the 79% breakage, on-demand resolution, the id/URL
+agreement rule. **The ones about what a specific link resolves to did not.** One claim recorded in
+an earlier draft — that the host check has a "known false positive" on affiliate hops — was an
+artifact of the fetch and has been retracted.
 
-**Measure it from a browser before building anything.** Those numbers come from separate TLS
-connections on a datacenter IP with no session cookies; a browser issues the same requests as
-multiplexed streams over one HTTP/2 connection and may not trip the limit at all. If it tripped this
-badly in practice, unresolved links would be the norm rather than the exception, which they are not.
+The rule going forward: a measurement of *whether the mechanism works* can be taken with `curl`; a
+measurement of *where a link goes* must come from a browser.
 
-The failure is graceful and self-healing either way — an unresolved link is never cached, so the next
-page load retries it — so this costs unresolved links on a single pageview, not correctness.
+---
+
+## 3. Outstanding
+
+**Confirm which commit was browser-tested.** All seven commits on PR #40 carry `26.11.14`, so the
+version string cannot distinguish them. The live test that showed the two `timex.com` post links
+resolving correctly is a real-browser validation of item 3 above **only if it ran on `2dfdd97` or
+later**; before that commit those links took the shared-id path instead. Quickest re-check: tick
+Debug and reload thread `19856376`. On `2dfdd97`+ the two post links log no "destination discarded"
+line at all, because they never ask the shared id.
+
+**Unbounded concurrency.** `processLinks()` fires `resolveUrl()` for every link with no `await` and
+no queue, so a thread with 47 resolvable links opens 47 simultaneous requests. Measured over separate
+`curl` connections the service serves roughly four at a time: 12 requests at concurrency 1 all
+succeeded, 8-plus in flight lost two thirds, 30 sequential at 200ms spacing lost 2. **Not acted on,
+deliberately** — those are separate TLS handshakes from a datacenter IP, while a browser issues the
+same requests as multiplexed streams over one HTTP/2 connection and may not trip the limit at all.
+Per §2, measure from a browser first. Failure is graceful and self-healing either way: an unresolved
+link is never cached, so the next page load retries it.
+
+**Quick View links are unsampled.** Listing pages carry no `/click` links until a card is expanded,
+and `slickdeals.net` resets headless Chromium, so that path was never exercised. If anything
+misbehaves, look here first. Note the check is inert until a card is expanded — the homepage serves
+zero `/click` links and zero `data-product-exitWebsite` attributes.
+
+**Possible free extra hop, unverified.** A `track.flexlinkspro.com` destination carried the full
+final URL in its own `url=` parameter, extractable locally with no request, exactly like `u2`. Found
+with a curl-derived `u3`, so per §2 it may not describe what a browser gets — a browser may receive
+the final URL directly and never see the redirector. Confirm from a browser before building on it.
+
+**README screenshot of the classic-layout menu.** Requested, not done. The site resets headless
+Chromium here, so no genuine screenshot could be taken, and a fixture mock-up presented as a
+screenshot would misrepresent the UI. Needs to be captured by hand.
 
 ---
 
 ## 4. Environment
 
-This session had working network access to both `slickdeals.net` and `slickdeals.net.vano.org`, so
-every measurement above was taken directly with `curl` rather than pasted from a browser console. If
-a future container cannot reach them, set **Network access → Custom** with those two hosts and
-**"Also include default list of common package managers" checked**.
+Network access to `slickdeals.net` and `slickdeals.net.vano.org` worked this session. If a future
+container cannot reach them, set **Network access → Custom** with those two hosts and **"Also
+include default list of common package managers" checked**.
 
-Two things that will otherwise waste a session:
+Things that will otherwise waste a session:
 
 - **The resolver requires `Origin` and `Referer`.** Without them every request returns 404 / error
   `1.30` regardless of the id, which reads exactly like the service being down.
-- **It rate-limits.** Sustained probing gets connection resets; ~1.8s between requests was stable.
-
-`slickdeals.net` resets headless Chromium (bot protection), but serves `curl` with a browser
-user-agent. Deal listing pages are client-rendered: the homepage carries **no** `/click` links at
-all, and forum threads are where they live.
+- **It rate-limits by concurrency, not volume.** Sequential requests at ~1.8-2.5s spacing are stable;
+  parallel bursts get connection resets. Always back off and retry before recording a failure — most
+  of this session's apparent 404s were rate limiting, including one wrongly attributed to a missing
+  `u3`.
+- **Error codes:** `1.30` = missing Origin/Referer. `7.122` = the id in the path does not agree with
+  the URL in the body.
+- `slickdeals.net` resets headless Chromium but serves `curl` with a browser user-agent.
 
 ---
 
 ## 5. Test fixtures
 
-Thread: `https://slickdeals.net/f/19854408-…` — colour variants in the deal body on page 1, the REI
-post link on page 2. A single fetch of the base URL returns both.
+- **`19854408`** — colour variants in the deal body, the rei.com post link in a later post. A single
+  fetch of the base URL returns both. The rei.com link is the collision fixture.
+- **`19856376`** (Timex) — three links stating `timex.com`: a `Get Deal at Timex` CTA with no `lno`
+  (shared-id path) and two post-content links with `lno` and no `pno` (unique-id path). This is the
+  fixture that exposed the `u3` finding in §2.
 
-Ground truth for that thread, if you need to re-derive it: Slickdeals' own `/click` URL 302s straight
-to the destination, and for affiliate-wrapped links the `u=` parameter carries the full target. **Do
-not build this into the script** — every such request mints a fresh `ascsubtag` and registers as a
-click, so using it for resolution would generate phantom affiliate clicks on every page load. It is a
-diagnostic, not a mechanism.
+Ground truth, if it must be re-derived: Slickdeals' own `/click` URL 302s straight to the
+destination, and affiliate-wrapped links carry the full target in a `u=` parameter. **Do not build
+this into the script** — every such request mints a fresh `ascsubtag` and registers as a click, so
+using it for resolution would generate phantom affiliate clicks on every page load. Diagnostic only,
+and use it sparingly even then.
 
 ---
 
 ## 6. Before you ship
 
-From `FORK-NOTES.md` — the ones this area keeps tripping over:
-
-- `getUrlId()` must keep upstream's exact shape, **and** must keep agreeing with the URL that is
-  submitted alongside it. That second half is why the earlier collision-free attempt 404'd.
+- `getUrlId()` must keep upstream's shape **and** keep agreeing with the URL submitted alongside it.
+  That second half is why the earlier collision-free attempt 404'd — not the shape, as was recorded.
 - `VERSION` is a path segment in the resolver URL. Bump it; never change its shape. `@version` and
   `const VERSION` must agree or the release workflow fails.
 - The stylesheet is one template literal — no backtick or `${` anywhere in it, comments included.
   `sed -n '/^})(`/,$p' 'Slickdeals+.user.js' | grep -c '`\|\${'` must print `2`.
-- `node --check 'Slickdeals+.user.js'` proves nothing about behaviour. Every regression in this
-  repo's history passed it.
-- **The lesson this handoff exists to pass on:** a signal validated on one sample is not validated.
-  Find the case that discriminates between your explanation and its rival, and test *that*. Then
-  measure how far the problem actually reaches — 26.11.13 was reported as a handful of colour links
-  and was in fact four links in five.
+- `node --check` proves nothing about behaviour. Every regression in this repo's history passed it.
+- The release workflow runs only on push to `master`, so a PR shows no checks. That is expected, not
+  a failure. Its gates — version consistency and `node --check` — are worth running by hand.
+- **Two lessons, both learned the hard way here.** A signal validated on one sample is not validated:
+  find the case that tells your explanation apart from its rival and test *that*. And measure how far
+  a problem reaches rather than trusting the report that surfaced it — 26.11.13 was reported as a
+  handful of colour links and was four links in five.
