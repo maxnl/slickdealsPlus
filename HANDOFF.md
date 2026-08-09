@@ -1,7 +1,7 @@
 # Handoff — link resolution work
 
-Written at the end of the session that shipped **v26.11.14** (PR #40) and **v26.11.15** (PR #41).
-Both are merged and released. Read this with
+Written at the end of the session that shipped **v26.11.14** through **v26.11.18** (PRs #40-#45).
+All are merged and released. Read this with
 [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable architecture notes; this file holds only
 what the next session needs to pick the work up, and should be deleted once the open items below are
 closed.
