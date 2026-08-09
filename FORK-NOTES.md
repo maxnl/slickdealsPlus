@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.17** |
+| Current | **v26.11.18** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -75,7 +75,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.14 | [#40](https://github.com/maxnl/slickdealsPlus/pull/40) | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
 | 26.11.15 | [#41](https://github.com/maxnl/slickdealsPlus/pull/41) | Post-content links are asked under an id of their own from the start |
 | 26.11.16 | [#42](https://github.com/maxnl/slickdealsPlus/pull/42) | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
-| 26.11.17 | — | Shared-id requests send the link's own href again (no behaviour change) |
+| 26.11.17 | [#43](https://github.com/maxnl/slickdealsPlus/pull/43) | Shared-id requests send the link's own href again (no behaviour change) |
+| 26.11.18 | — | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
 
 ---
 
@@ -319,6 +320,26 @@ The failure is the same shape as #1, committed in the same breath as a warning a
 that would have caught it: find the case that tells your explanation apart from its rival, and test
 *that* one.
 
+**Fixing an asymmetry on one path does not fix it on the other** (26.11.14 -> 26.11.18). The retry
+applies its answer without the plausibility check, because an answer resolved for one exact URL cannot
+be another link's. The cached branch went on checking every non-`u2` destination on the way back out.
+So any link whose genuine destination sits on a host its anchor does not state - an affiliate
+redirector like `track.flexlinkspro.com` for a `timex.com` link - discarded its own cache entry on
+every page load, re-asked, got the same answer, re-applied and re-cached it. Two requests per page
+load for the life of the install, and the cache never settling for exactly the links that most need
+it. Nothing looked broken: the link resolved correctly every time.
+
+26.11.16 fixed this shape for links asked under a unique id and stopped there. The identical
+asymmetry on the shared path survived two further reviews because both were spent confirming the
+half already fixed. Found by simulating five consecutive page loads of one link rather than reasoning
+about a single load - a state machine that settles and one that oscillates look the same if you only
+ever run one step.
+
+The fix removes the cached check outright rather than narrowing it again. It is no longer needed:
+everything in the cache was written by current logic and is trustworthy, either because it passed the
+check when it arrived or because it came from a unique id, and legacy entries were dropped once on
+the way in to 26.11.16.
+
 **Skipping a check also skips its cleanup** (26.11.15 -> 26.11.16). 26.11.15 stopped checking a
 cached destination for links asked under an id of their own, which is right on its own terms: such an
 answer was resolved for that exact URL and cannot belong to another link. What it missed is that the
@@ -486,7 +507,7 @@ None of these is a defect; all are known and deliberate.
 | An unwrapped destination can be an affiliate redirector | `flexoffers.com`, `go.loaded.com`, `goto.walmart.com`. Unwrapping removes the Slickdeals hop, not every hop. Nothing to fix - it is the genuine destination - but it is why a `.tracked`-style badge showing the real host would be worth more than it first appears. **Do not try to resolve one of these through the service**: it derives the id from the URL submitted and requires it to match the id in the path, and a non-Slickdeals URL derives no id at all, so every such request is refused with 404 / error `7.122`. Measured on the `flexoffers.com` destination above under three different ids. `getUrlId()` returns `false` for those hostnames anyway, so the script never asks. Following the hop would mean fetching the redirect ourselves, which registers an affiliate click - see the note against the `/click` 302 in `HANDOFF.md`. |
 | ~~The REI post link does not unwrap~~ | **Fixed in 26.11.14** by the unique-id retry. Fixture thread now unwraps 13 of 13. |
 | Quick View links resolve correctly | Confirmed in a browser: expanding a listing card shows links blue then green moments later, i.e. injected markup is picked up by the MutationObserver, processed and unwrapped. This path cannot be sampled offline - listing pages carry no `/click` links until a card is expanded - so the browser check is the only evidence there is, and it is positive. |
-| A post-content link's cached destination is trusted rather than re-checked | **These links are cached exactly like any other** - the first load resolves and stores, every later load is a cache hit with no request. Nothing about caching differs. What does not happen is the *plausibility check re-running on the way out of the cache*, and that is deliberate since 26.11.15: the value was resolved under an id unique to this link, so it cannot be another link's answer and there is nothing for the check to catch. Keep it in proportion - no safety net was lost. No cached-value check existed at all before 26.11.13, that version's check was the broken one that rejected 228 of 287 links, and the working version was released at 08:28 and guarded at 13:22 the same day: **four hours fifty-four minutes** of released life. What it does mean is that a wrong answer to a *unique* lookup - much less likely than a collision, but not impossible - would persist until the 5000-entry cap evicted it, since nothing would notice. Entries written before the guard existed are handled by the one-off 26.11.16 purge. Symptom: one forum-post link resolving somewhere wrong and staying wrong across reloads while its neighbours are fine. Remedy: `localStorage.removeItem("slickdeals+links")`. A TTL would close it properly if it ever bites. |
+| No cached destination is re-checked, for any link | **Links are cached exactly as before** - first load resolves and stores, later loads are cache hits with no request. What no longer happens, since 26.11.18, is the plausibility check re-running on the way *out* of the cache. It is unnecessary: everything in the cache was written by current logic, either passing the check when it arrived or coming from an id unique to that link, and legacy entries were dropped once on the way in to 26.11.16. It was also actively harmful - see [issues we hit](#issues-we-hit) for the every-page-load loop it caused. The residual is that a wrong answer, if the service ever gave one to a checked or unique lookup, would persist until the 5000-entry cap evicted it. Symptom: one link resolving somewhere wrong and staying wrong across reloads while its neighbours are fine. Remedy: `localStorage.removeItem("slickdeals+links")`. A TTL would close it properly if it ever bites. |
 | The resolver is asked with unbounded concurrency | `processLinks()` fires every link's request at once. Measured over separate connections the service serves roughly 4 at a time; a browser's single multiplexed connection may behave differently, and that has not been measured. Failure is graceful and self-healing — an unresolved link is never cached, so the next page load retries it — so this costs unresolved links on one pageview, not correctness. See [suggested enhancements](#suggested-enhancements). |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 

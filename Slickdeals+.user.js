@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.17
+// @version      26.11.18
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.17";
+const VERSION = "26.11.18";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.17";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `* internal only - a link asked under the shared resolver id is sent its own href untouched again, as before 26.11.15
-# no behaviour change; the two forms were already equivalent, this keeps the untouched path byte-identical`;
+const CHANGES = `! a link going to an affiliate redirector re-resolved on every page load and never settled in the cache
+# its cached destination was discarded on the way out by a check the answer had already been exempted from`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1993,12 +1993,6 @@ const processLinks = (node, force) =>
 			continue;
 
 		const key = getCacheKey(urlObject);
-		/* Which id this link is asked under. Decided here rather than at the
-		 * request below because the cached-destination check needs it too: a
-		 * destination obtained from a unique id is not checked when it arrives,
-		 * so checking it on the way back out of the cache would delete it on the
-		 * next page load and ask for it again, every load, forever. */
-		const request = resolverRequest(urlObject, key, id);
 		const queryObject = new URLSearchParams(urlObject.search);
 		if (!elLink._elHover)
 		{
@@ -2060,38 +2054,26 @@ const processLinks = (node, force) =>
 			 * now or from the cache - only resolver responses are ever written to
 			 * it, so the distinction stays clean. */
 			const isLocal = queryObject.has("u2");
-			/* u2 is the destination the link carries, so there is nothing to check
-			 * it against and nothing to gain by trying. A cached one came from the
-			 * resolver and can be an id collision that was written before this
-			 * check existed, so drop it rather than keep handing it out - leaving
-			 * it in place would keep the wrong destination on this link forever.
+			/* A cached destination is applied as it stands, never re-checked.
 			 *
-			 * Unless this link is asked under an id of its own, in which case what
-			 * is cached was resolved for this exact URL and cannot be another
-			 * link's destination. It was applied unchecked, so it has to be read
-			 * back unchecked: checking only on the way out would discard it on the
-			 * next page load, re-request it, apply the same answer again and cache
-			 * it again - once per page load, indefinitely. */
-			if (!isLocal && !request.unique && !isDestinationPlausible(elLink, url))
-			{
-				debug(debugPrefix + "%ccached destination discarded, wrong site for this link",
-					"color:red",
-					"color:#656",
-					key,
-					elLink.href,
-					url
-				);
-				// eslint-disable-next-line unicorn/no-null
-				SETTINGS(key, null);
-				url = "";
-			}
-			else
-			{
-				elLink._hrefLocal = isLocal;
-				aLinks.resolved = true;
-				linkUpdate(elLink, url, force);
-				continue;
-			}
+			 * Everything now in the cache was written by this version's logic and
+			 * is trustworthy: either it passed isDestinationPlausible() when it
+			 * arrived, or it came from an id unique to this link - resolved for
+			 * this exact URL, so it cannot be another link's answer. Entries from
+			 * before that was true were dropped once, on the way in to 26.11.16.
+			 *
+			 * Re-checking was worse than useless. An answer obtained by the retry
+			 * is applied without the check but was being checked on the way back
+			 * out, so any link whose genuine destination sits on a host its anchor
+			 * does not state - an affiliate redirector like track.flexlinkspro.com
+			 * for a timex.com link - discarded its own cache entry on every page
+			 * load, re-asked, got the same answer, re-applied and re-cached it.
+			 * Two requests per page load, for the life of the install, and the
+			 * cache never settling for exactly the links that most need it. */
+			elLink._hrefLocal = isLocal;
+			aLinks.resolved = true;
+			linkUpdate(elLink, url, force);
+			continue;
 		}
 		/* `return` here aborted the whole loop, so as soon as two links on a page
 		 * shared an id every remaining link went unprocessed. */
@@ -2120,6 +2102,12 @@ const processLinks = (node, force) =>
 		 */
 		/* A unique id brings its own URL, carrying the replaced index; anything
 		 * asked under upstream's id is sent the link's own href untouched. */
+		/* Which id to ask under. A link whose id is ambiguous by construction is
+		 * asked uniquely from the start rather than being asked, disbelieved and
+		 * asked again - see resolverRequest(). A unique id brings its own URL,
+		 * carrying the replaced index; anything else sends the link's own href. */
+		const request = resolverRequest(urlObject, key, id);
+
 		resolveUrl(request.id, request.url || elLink._hrefOrig)
 			.then(response =>
 			{
