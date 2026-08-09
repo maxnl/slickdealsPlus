@@ -190,6 +190,16 @@ Recorded because the *shape* of each recurs.
 228-byte body, a differently-derived id for the same link and version returned 404. Collision
 freedom moved to `getCacheKey()` instead.
 
+**A collision-free cache key does not make the answer right** (26.11.13). #24 established that
+`getUrlId()` must keep upstream's shape and that collision-freedom belongs in `getCacheKey()`. That
+is still true, and it is still not enough: keying the *cache* per link stops one link inheriting
+another's destination locally, but the resolver is still addressed with the ambiguous id, so it can
+answer a rei.com link with an amazon.com destination and the cache faithfully stores it under the
+right key. The tell was an `ascsubtag` inside the wrong destination that belonged to a different
+pageview — proof the value came off the wire and not out of our own cache. The lesson generalises:
+when an id sent to a third party is known to collide, every answer that comes back on it is a claim,
+not a fact, and needs checking against something the request itself carries.
+
 **Backticks inside CSS comments, four times.** The entire stylesheet is one template literal passed
 into the IIFE. A backtick in a comment terminates it. Caught by `node --check` every time, but only
 because it is run every time.
@@ -264,6 +274,12 @@ was one of these five.
 ### Other things that will bite
 
 - **`processedMarker` is `℗`** (U+2117), used as a class name. Valid CSS, surprising in a grep.
+- **`trd` on a `/click` link is the destination**, with runs of non-alphanumerics collapsed to `+`
+  and truncated to exactly 32 characters. It is the only ground truth a link carries about where it
+  goes, and `isDestinationPlausible()` is the only consumer. Note `URLSearchParams.get("trd")`
+  returns it with the `+` separators as spaces.
+- **`SETTINGS(id, null)` deletes**, but only for link-cache ids (`/^\d/`). Settings are unaffected —
+  `css` is legitimately stored as null and goes through `settings.set()` directly.
 - **`Map` eviction is FIFO, not LRU.** Re-setting an existing key does not move it.
 - **`URLSearchParams.get()` already percent-decodes.** Do not wrap it in `decodeURIComponent`.
 - **`initMenu()` requires** at least 4 children on its host, a `<header>` ancestor
@@ -300,6 +316,8 @@ None of these is a defect; all are known and deliberate.
 | Classic menu mounts on `window load` | Appears late on slow pages. The `document-start` call runs before any bar exists. |
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
+| Every cached link adds a class to `<html>` | `settingsFunction()` ends in `document.documentElement.classList.toggle(id, !!value)`, which runs for link-cache ids too, so each resolved link leaves a `0…crc` class on the root element. Harmless — nothing styles them — but it is DOM pollution proportional to the cache. Left alone rather than folded into an unrelated fix. |
+| `isDestinationPlausible()` could reject a good answer | Only if the resolver returns a *different host* from the one `trd` recorded, which was not observed. The failure is graceful — the link keeps its original href and stays `notResolved` — and visible: tick Debug and look for "destination discarded". If those appear on links that used to resolve correctly, the host comparison is too strict. |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 
 ---
