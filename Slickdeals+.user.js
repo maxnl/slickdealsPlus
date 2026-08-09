@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.12
+// @version      26.11.13
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.12";
+const VERSION = "26.11.13";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.12";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! unresolvable links no longer print an error for each one
-! an empty entry leaked per link the resolver could not resolve`;
+const CHANGES = `! links inside forum posts could resolve to the deal's own destination
+! every cached link left its cache key on <html> as a class`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -461,6 +461,19 @@ const SETTINGS = (() =>
 		if (value === undefined)
 			return storageData.get(id);
 
+		/* Only the link cache can be deleted from, and only with an explicit
+		 * null - a destination that turns out to belong to a different link has
+		 * to go, or it is read back and reapplied on every page load. Settings
+		 * are untouched by this: `css` is legitimately stored as null. */
+		if (storageData === links && value === null)
+		{
+			if (!links.delete(id))
+				return false;
+
+			settingsSave();
+			return true;
+		}
+
 		storageData.set(id, value);
 		//trim oldest-first so the cache cannot grow past the cap
 		while (storageData === links && links.size > LINKS_MAX)
@@ -469,7 +482,16 @@ const SETTINGS = (() =>
 		if (defaultSettings[id]?.onChange instanceof Function)
 			defaultSettings[id].onChange(value);
 
-		document.documentElement.classList.toggle(id, !!value);
+		/* Settings only. This ran for every id, so each resolved link left a
+		 * `0…crc` cache key on <html> as a class - one per link, for the life of
+		 * the page, nothing reading them. settingsInit() has always iterated
+		 * `defaultSettings` rather than the stored data, so the startup path
+		 * never had this problem and no setting depends on the link branch: the
+		 * test is the same `isLink` routing that chose `storageData` above, and
+		 * every settings key begins with a letter. */
+		if (storageData === settings)
+			document.documentElement.classList.toggle(id, !!value);
+
 		settingsSave();
 		return true;
 	};
@@ -1999,10 +2021,32 @@ const processLinks = (node, force) =>
 			 * and costs nothing; anything else came from the resolver, either just
 			 * now or from the cache - only resolver responses are ever written to
 			 * it, so the distinction stays clean. */
-			elLink._hrefLocal = queryObject.has("u2");
-			aLinks.resolved = true;
-			linkUpdate(elLink, url, force);
-			continue;
+			const isLocal = queryObject.has("u2");
+			/* u2 is the destination the link carries, so there is nothing to check
+			 * it against and nothing to gain by trying. A cached one came from the
+			 * resolver and can be an id collision that was written before this
+			 * check existed, so drop it rather than keep handing it out - leaving
+			 * it in place would keep the wrong destination on this link forever. */
+			if (!isLocal && !isDestinationPlausible(urlObject, url))
+			{
+				debug(debugPrefix + "%ccached destination discarded, wrong site for this link",
+					"color:red",
+					"color:#656",
+					key,
+					elLink.href,
+					url
+				);
+				// eslint-disable-next-line unicorn/no-null
+				SETTINGS(key, null);
+				url = "";
+			}
+			else
+			{
+				elLink._hrefLocal = isLocal;
+				aLinks.resolved = true;
+				linkUpdate(elLink, url, force);
+				continue;
+			}
 		}
 		/* `return` here aborted the whole loop, so as soon as two links on a page
 		 * shared an id every remaining link went unprocessed. */
@@ -2046,6 +2090,23 @@ const processLinks = (node, force) =>
 				{
 					if (!/^https?:\/\//.test(response))
 						return;
+
+					/* The service answers an ambiguous id with one destination for
+					 * every link that shares it. Neither cache nor apply it when
+					 * the link itself says it goes somewhere else: the link keeps
+					 * its original href and stays notResolved, which is what it
+					 * would do if the service had no answer at all. */
+					if (!isDestinationPlausible(urlObject, response))
+					{
+						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
+							"color:red",
+							"color:#656",
+							id,
+							elLink._hrefOrig,
+							response
+						);
+						return response;
+					}
 
 					SETTINGS(key, response);
 					for(let i = 0; i < aLinks.length; i++)
@@ -2282,6 +2343,82 @@ const getCacheKey = (() =>
 		return 0 + crc32(urlObject.pathname + "?" + queryObject.toString()) + "crc";
 	};
 })();
+
+/**
+ * Checks a destination against the one the link itself records in `trd`.
+ *
+ * getCacheKey() stops links sharing a resolver id from inheriting each other's
+ * destination locally, but it cannot help when the wrong destination is already
+ * wrong on arrival - and it arrives wrong for links inside forum posts. `lno` is
+ * the link index within a post and restarts at 1 in every post, so the first
+ * link of every post in a thread is sent to the resolver as the same id
+ * (`19854408sdtid1lno` for thread 19854408), and the service answers all of them
+ * with one destination: the thread's own product page. A post linking to
+ * rei.com came back as the deal's amazon.com page, carrying an `ascsubtag` from
+ * an entirely different pageview. The id shape is not ours to change - see
+ * getUrlId() - so the answer has to be checked instead.
+ *
+ * `trd` is what makes that possible. Slickdeals writes the outbound URL into it
+ * with every run of non-alphanumeric characters collapsed to `+`, cut at 32
+ * characters: `https://www.rei.com/learn/expert-c…` is stored as
+ * `https+www+rei+com+learn+expert+c`. Lossy, and the tail is usually half a
+ * word, but the host survives whole for any host short enough to fit.
+ *
+ * Only the host is compared, because only the host is reliable. The resolver
+ * legitimately hands back a different path from the one `trd` recorded - an
+ * Amazon `/dp/` link comes back as `/gp/product/`, affiliate parameters get
+ * appended - but it does not hand back a different site. The scheme and a
+ * leading `www` are dropped from both sides so that normalising either is not
+ * read as a mismatch, and a link with no `trd` is passed through untouched.
+ * @function
+ * @param {URL} urlObject - The original link.
+ * @param {string} url - The destination to check.
+ * @returns {boolean} false only when the link says where it goes and this is not it
+ */
+const isDestinationPlausible = (() =>
+{
+	const fingerprint = value => ("" + value).toLowerCase().replace(/[^a-z\d]+/g, "+").replace(/^\++|\++$/g, "");
+	const ignored = ["http", "https", "www"];
+	const tokens = value =>
+	{
+		const result = fingerprint(value).split("+");
+		while (result.length > 1 && ignored.includes(result[0]))
+			result.shift();
+
+		return result;
+	};
+	return (urlObject, url) =>
+	{
+		/* URLSearchParams.get() turns the `+` separators into spaces; tokens()
+		 * splits on non-alphanumerics, so both spellings land on the same list. */
+		const trd = new URLSearchParams(urlObject.search).get("trd");
+		if (!trd)
+			return true; //the link records nothing to check against
+
+		let host;
+		try
+		{
+			host = new URL(url).hostname;
+		}
+		catch
+		{
+			return false;
+		}
+		const aTrd = tokens(trd);
+		const aHost = tokens(host);
+		const count = Math.min(aTrd.length, aHost.length);
+		for (let i = 0; i < count; i++)
+		{
+			/* `trd` is cut at 32 characters, so its final token can be the front
+			 * of a longer word - `…+expert+c` for `expert-clothing`. Compare that
+			 * one as a prefix; every earlier token is whole. */
+			if (i === aTrd.length - 1 ? !aHost[i].startsWith(aTrd[i]) : aHost[i] !== aTrd[i])
+				return false;
+		}
+		return true;
+	};
+})();
+
 /**
  * Injects custom CSS into the document.
  *
