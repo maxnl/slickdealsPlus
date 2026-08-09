@@ -71,6 +71,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.10 | [#34](https://github.com/maxnl/slickdealsPlus/pull/34) | Even out the space around the version number |
 | 26.11.11 | [#35](https://github.com/maxnl/slickdealsPlus/pull/35) | Version number an even 15px from both menu edges |
 | 26.11.12 | [#36](https://github.com/maxnl/slickdealsPlus/pull/36) | Resolver console flood silenced; failed-group leak closed |
+| 26.11.13 | — | **Post links no longer resolve to the deal's own destination** |
 
 ---
 
@@ -104,6 +105,22 @@ unchanged cache. Now it evicts oldest-first in exponentially growing batches, an
 (`LINKS_MAX = 3000`) trims on write so the failure path is rarely reached at all. Separately,
 `linksData` kept a reference to every anchor the script had ever seen, including detached ones —
 1000 retained references dropped to 20 once departed links were pruned.
+
+**A wrong answer is now rejected rather than displayed** (26.11.13). `getCacheKey()` stops links
+that share a resolver id from inheriting each other's destination *locally*, but the destination for
+a link inside a forum post is already wrong when it arrives: `lno` restarts at 1 in every post, so
+the first link of every post in a thread is sent as one id (`19854408sdtid1lno`) and the service
+answers all of them with the thread's own product page. Reported live — a post linking to `rei.com`
+rendered as the deal's `amazon.com` page, with an `ascsubtag` from a different pageview, which is
+what identified the answer as the service's and not the cache's.
+
+The id shape is not ours to change, so `isDestinationPlausible()` checks the answer against `trd`,
+which the link carries: the outbound URL with non-alphanumeric runs collapsed to `+`, cut at 32
+characters (`https+www+rei+com+learn+expert+c`). Only the host is compared — the resolver
+legitimately returns a different path (`/dp/` comes back as `/gp/product/`, affiliate parameters get
+appended) but never a different site. Scheme and a leading `www` are dropped from both sides; a link
+with no `trd` is passed through unchecked. A rejected destination is neither applied nor cached, and
+a cached one that fails is deleted, so a bad entry written before this check cannot keep reappearing.
 
 **Failure handling** (#36). The promise chain ended in `.catch(console.error)`, so every unresolvable
 link printed a red stack trace; a page carries hundreds. Now routed through `debug()`. The group
