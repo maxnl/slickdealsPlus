@@ -1,7 +1,7 @@
 # Handoff — link resolution work
 
-Written at the end of the session that shipped **v26.11.14** (PR #40, merged and released) and
-prepared **v26.11.15**. Read this with
+Written at the end of the session that shipped **v26.11.14** (PR #40) and **v26.11.15** (PR #41).
+Both are merged and released. Read this with
 [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable architecture notes; this file holds only
 what the next session needs to pick the work up, and should be deleted once the open items below are
 closed.
@@ -19,7 +19,7 @@ Measured rather than estimated: that check rejected **228 of 287 links across 25
 the `Get Deal at Amazon` button and every deal image included. It was reported as "the colour
 variants stopped resolving"; it was closer to all link resolution stopping.
 
-26.11.14 (released) does the first two; 26.11.15 adds the third:
+26.11.14 does the first two; 26.11.15 adds the third. Both are released:
 
 1. **Checks against `data-product-exitwebsite`**, the destination host Slickdeals states on the
    anchor. Sampled before adopting: 287 links, 15 distinct hosts, hostname-shaped every time, never a
@@ -58,13 +58,19 @@ measurement of *where a link goes* must come from a browser.
 
 ## 3. Outstanding
 
-**Item 3 has not been checked in a browser.** The live test of thread `19856376` ran on the released
-v26.11.14, which predates it, so those two `timex.com` post links were asked under the *shared* id -
-and answered correctly, with the true product URL. Under 26.11.15 they are asked under a unique id
-instead, and the only measurement of what that returns for them came from probes carrying a
-curl-derived `u3`, which answered an opaque `flexoffers.com` redirector. Per §2 that cannot tell a
-real downgrade from an artifact. **This is the one thing to verify before trusting 26.11.15**: load
-`19856376` with the link cache cleared and confirm both post links still land on `timex.com`.
+**Asking uniquely has not been checked in a browser - and it is now live.** The browser test of
+thread `19856376` ran on v26.11.14, which predates the change, so those two `timex.com` post links
+were asked under the *shared* id and answered correctly with the true product URL. From 26.11.15 they
+take the unique path instead, and the only measurement of what that returns for them came from probes
+carrying a curl-derived `u3`, which answered an opaque `flexoffers.com` redirector. Per §2 that
+cannot tell a real downgrade from an artifact of the fetch.
+
+**Check this first, on a released build:** clear the link cache
+(`localStorage.removeItem("slickdeals+links"); location.reload();`), load `19856376`, and confirm both
+green post links still land on `timex.com`. If they land on `flexoffers.com` instead, the change is a
+downgrade for links of that shape and `resolverRequest()` should be reverted - 26.11.14's behaviour is
+unaffected and still released. If they land on `timex.com`, this item is closed and the curl result
+was an artifact, as §2 predicts.
 
 **Unbounded concurrency.** `processLinks()` fires `resolveUrl()` for every link with no `await` and
 no queue, so a thread with 47 resolvable links opens 47 simultaneous requests. Measured over separate
