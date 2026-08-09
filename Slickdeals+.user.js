@@ -2111,10 +2111,15 @@ const processLinks = (node, force) =>
 					 * a different link sharing this one's id. An answer to a unique
 					 * id cannot be that - it was resolved for this exact URL - so it
 					 * is not checked at all, the same reasoning that lets the retry
-					 * below apply its answer unexamined. Checking it anyway would
-					 * reject legitimate affiliate hops onto unrelated domains, which
-					 * is precisely the check's known false positive: a timex.com
-					 * link genuinely resolves to www.flexoffers.com. */
+					 * below apply its answer unexamined.
+					 *
+					 * Do not reintroduce a check here on the strength of an answer
+					 * measured outside a browser. The service resolves from `u3`,
+					 * and `u3` differs between a signed-out fetch of a page and a
+					 * real session: the same timex.com link answered
+					 * www.flexoffers.com to a curl-fetched URL and the true
+					 * timex.com product URL to a browser's. Anything derived from
+					 * the former describes the fetch, not the link. */
 					if (!request.unique && !isDestinationPlausible(elLink, response))
 					{
 						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
