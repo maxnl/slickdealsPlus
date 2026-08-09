@@ -346,6 +346,19 @@ so this would fill in exactly the links it leaves bare — and would show the tr
 than the one their template asserts. This is also the natural use for `.tracked`: mark the links we
 could not unwrap.
 
+**Validate destinations against `data-product-exitwebsite` instead of `trd`.** Slickdeals states the
+destination host directly on the anchor: the reported REI link carried
+`data-product-exitwebsite="rei.com"` alongside `data-cta="outclick"` and
+`data-outclick-typeofoutclick="Post Content Link"`. That is exact, where `trd` is truncated at 32
+characters and forces `isDestinationPlausible()` to compare its final token as a prefix — the
+fuzziest part of the check and the most likely source of a false rejection. Not adopted yet on one
+observation: if the attribute is ever a merchant *name* (`REI`) rather than a host, a host comparison
+against it would reject correct answers everywhere. Worth switching to — preferring the attribute and
+keeping `trd` as the fallback — once it has been sampled across a few hundred links on several page
+types. Confirmed at the same time: the full destination is **not** recoverable locally. The only
+`rei.com` URL in the post's markup is the abridged link *text*
+(`https://www.rei.com/learn/expert-...ction.html`), so the resolver remains the only source.
+
 **Local price history.** Store `{dealId: [{price, date}]}` alongside the link cache and flag a card
 when the same item was posted cheaper before. Entirely local. "Is this actually a good price" is the
 question the current percent badge only half answers, since it trusts the merchant's own list price.
