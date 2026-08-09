@@ -190,6 +190,15 @@ Recorded because the *shape* of each recurs.
 228-byte body, a differently-derived id for the same link and version returned 404. Collision
 freedom moved to `getCacheKey()` instead.
 
+**A class per cached link on `<html>`** (26.11.13). `settingsFunction()` ended in
+`document.documentElement.classList.toggle(id, !!value)`, run for every id it was given — including
+link-cache ids, so each resolved link left a `0…crc` class on the root element, one per link, with
+nothing reading them. Noticed while adding the cache delete, fixed in its own commit rather than
+folded in. Safe because `settingsInit()` has always iterated `defaultSettings` rather than the
+stored data, so the startup path never had the problem, and the guard reuses the same `isLink`
+routing that already chose the storage Map — with all 17 settings keys beginning with a letter, no
+setting can fall on the link side of it.
+
 **A collision-free cache key does not make the answer right** (26.11.13). #24 established that
 `getUrlId()` must keep upstream's shape and that collision-freedom belongs in `getCacheKey()`. That
 is still true, and it is still not enough: keying the *cache* per link stops one link inheriting
@@ -316,7 +325,6 @@ None of these is a defect; all are known and deliberate.
 | Classic menu mounts on `window load` | Appears late on slow pages. The `document-start` call runs before any bar exists. |
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
-| Every cached link adds a class to `<html>` | `settingsFunction()` ends in `document.documentElement.classList.toggle(id, !!value)`, which runs for link-cache ids too, so each resolved link leaves a `0…crc` class on the root element. Harmless — nothing styles them — but it is DOM pollution proportional to the cache. Left alone rather than folded into an unrelated fix. |
 | `isDestinationPlausible()` could reject a good answer | Only if the resolver returns a *different host* from the one `trd` recorded, which was not observed. The failure is graceful — the link keeps its original href and stays `notResolved` — and visible: tick Debug and look for "destination discarded". If those appear on links that used to resolve correctly, the host comparison is too strict. |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
 
