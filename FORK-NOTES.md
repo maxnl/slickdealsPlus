@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.22** |
+| Current | **v26.11.23** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -80,7 +80,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.19 | [#46](https://github.com/maxnl/slickdealsPlus/pull/46) | Free highlighting reaches the homepage list view and the `/deals/` list view |
 | 26.11.20 | [#47](https://github.com/maxnl/slickdealsPlus/pull/47) | **`lno` perturbation reverted - deal-body variant links resolved to the deal's default product** |
 | 26.11.21 | [#48](https://github.com/maxnl/slickdealsPlus/pull/48) | An affiliate network is no longer read as a contradicting destination |
-| 26.11.22 | — | A network answer is followed on to the merchant, guarded by the host the anchor states |
+| 26.11.22 | [#49](https://github.com/maxnl/slickdealsPlus/pull/49) | A network answer is followed on to the merchant, guarded by the host the anchor states |
+| 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
 
 ---
 
@@ -306,6 +307,24 @@ and invisibly. No such link has been seen; Amazon links cannot produce one.
 
 The generalisation: "this operation is unsafe" and "this operation is unsafe here" are different
 claims, and collapsing them costs you the cases where it was the only thing that worked.
+
+**Naming the exception is a sign the rule is wrong** (26.11.21 -> 26.11.23). The host check kept
+rejecting affiliate networks, so 26.11.21 gave it a list of them to let through. maxnl objected to
+hardcoding domains and was right, for a better reason than maintenance: the list was standing in for
+a distinction the code could already make.
+
+A mismatch between the answer and the host the anchor states is *not* proof of a collision. It is
+equally what an intermediate hop looks like. Nothing about the answer tells you which - but asking
+again under an id the service holds nothing for does, because that resolves on demand, follows the
+chain, and either reaches the stated host or does not. Match, and it was an intermediate hop and is
+now complete. Still disagree, and it was a collision, so the link is left alone.
+
+That is generic, needs no knowledge of any particular network, and works for one nobody has seen
+before. It also resolves the rei.com post link, which the list never could - the collision and the
+intermediate hop turn out to be the same question, asked twice.
+
+The tell was having to write "add to this when an unfamiliar network turns up" in a comment. A rule
+that needs a growing list of exceptions is usually the wrong rule.
 
 **A check needs its false positives measured, not assumed** (26.11.13 -> 26.11.21). `isDestinationPlausible()`
 rejects an answer whose host contradicts the one the anchor states. Twice this session a false

@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.22
+// @version      26.11.23
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.22";
+const VERSION = "26.11.23";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.22";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `+ a link answered with an affiliate network is followed on to the shop itself
-# only when the answer is a network, and only if it lands on the host the link says it goes to`;
+const CHANGES = `+ a link answered somewhere other than where it says it goes is asked again, and followed on if that reaches it
+# no list of affiliate networks - the link states its own destination, and the answer either gets there or it does not`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2133,57 +2133,60 @@ const processLinks = (node, force) =>
 					if (!/^https?:\/\//.test(response))
 						return;
 
-					/* The service answers a colliding id with one destination for
-					 * every link that shares it, so an answer the anchor itself
-					 * contradicts is not applied and not cached. The link keeps its
-					 * original href and stays notResolved - it still reaches the
-					 * right page through Slickdeals' own redirect, it just loses
-					 * the unwrap. There is no second question worth asking: every
-					 * way of re-asking means altering the request, and `lno` is
-					 * exactly what a deal body's variant links encode. */
+					/* An answer whose host is not the one the anchor states is one
+					 * of two things, and they cannot be told apart by looking:
+					 * another link's destination, arriving because ids collide - or
+					 * this link's own destination seen at an intermediate hop,
+					 * because the service answers a known id from its cache and
+					 * what it cached was an affiliate network rather than the shop.
+					 *
+					 * Asking again under an id the service holds nothing for
+					 * settles it. That resolves on demand and follows the chain to
+					 * the end, so this link's real destination comes back - and if
+					 * what comes back is on the host the anchor states, it was an
+					 * intermediate hop and the answer is now complete. If it still
+					 * disagrees, it was a collision and the link is left alone.
+					 *
+					 * No list of affiliate networks, and nothing keyed to a
+					 * particular domain: the anchor states where it goes, and the
+					 * answer either gets there or it does not.
+					 *
+					 * Re-asking means altering the request, and `lno` is what a deal
+					 * body's variant links encode - perturbing it once rewrote seven
+					 * colour links to the deal's default product. That is why this
+					 * only happens for an answer that already disagrees: a link
+					 * answered with its own merchant, which is every one of those
+					 * colour links, never reaches here. And the result is taken only
+					 * when it matches the stated host, so a fall back to the deal's
+					 * default cannot be accepted in its place. */
 					if (!isDestinationPlausible(elLink, response))
-					{
-						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
-							"color:red",
-							"color:#656",
-							id,
-							elLink._hrefOrig,
-							response
-						);
-						return response;
-					}
-
-					/* The answer is right, but it may be an affiliate network's
-					 * first hop rather than the shop. Ask once more under a novel
-					 * id, which the service resolves on demand and follows to the
-					 * end - and take that answer only if it lands on the host this
-					 * anchor states, which is what makes altering the request safe
-					 * here. A link already answered with its merchant never gets
-					 * this far, so a deal body's variant links, whose `lno` the
-					 * perturbation would destroy, are not touched. */
-					const stated = elLink.dataset ? elLink.dataset.productExitwebsite : "";
-					if (stated && isRedirector(response))
 					{
 						return resolveFinalHop(urlObject, key).then(final =>
 						{
-							const better = final && hostOf(final) === hostOf(stated);
-							if (better)
+							if (!final || !isDestinationPlausible(elLink, final))
 							{
-								debug(debugPrefix + "%cfollowed the network hop to the merchant",
-									"color:green",
+								debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
+									"color:red",
 									"color:#656",
 									id,
-									response,
-									final
+									elLink._hrefOrig,
+									response
 								);
+								return response;
 							}
-							const use = better ? final : response;
-							SETTINGS(key, use);
+							debug(debugPrefix + "%cfollowed on to the host the link states",
+								"color:green",
+								"color:#656",
+								id,
+								response,
+								final
+							);
+							SETTINGS(key, final);
 							for(let i = 0; i < aLinks.length; i++)
-								linkUpdate(aLinks[i], use);
+								linkUpdate(aLinks[i], final);
 
 							aLinks.resolved = true;
-							return use;
+							return final;
 						});
 					}
 
@@ -2453,35 +2456,22 @@ const getCacheKey = (() =>
  * of them - the deal button and every deal image included.
  *
  * Only the host is compared, because only the host is reliable: the resolver
- * legitimately hands back a different path (an Amazon `/dp/` link comes back as
+ * legitimately returns a different path (an Amazon `/dp/` link comes back as
  * `/gp/product/`, affiliate parameters get appended). A leading `www` and the
  * scheme are dropped from both sides, and a subdomain of the stated host counts
- * as a match, which is what lets an affiliate hop like `go.loaded.com` through
- * for a link stating `loaded.com`. A redirector on an unrelated domain
- * (`track.flexlinkspro.com` for a `timex.com` link, 1 link in 31 sampled) is
- * still rejected; that fails safe - the link keeps its original href and stays
- * `notResolved`, which is what it would do had the service not answered.
+ * as a match.
+ *
+ * A mismatch is not proof of a collision - it is equally what an intermediate
+ * hop looks like, when the service answers from a cache holding an affiliate
+ * network rather than the shop. This function does not try to tell those apart,
+ * and deliberately knows nothing about particular networks; the caller settles
+ * it by asking again under an id the service holds nothing for and seeing
+ * whether the answer reaches the stated host.
  * @function
  * @param {HTMLElement} elLink - The anchor being resolved.
  * @param {string} url - The destination to check.
  * @returns {boolean} false only when the anchor states a host and this is not it
  */
-/* Affiliate networks the service legitimately answers with. Registrable domains
- * only; subdomains are matched too, so `track.flexlinkspro.com` and `rei.pxf.io`
- * are both covered by their bare entry. Add to this when an unfamiliar network
- * turns up - the symptom is a link that stays unresolved, logging "destination
- * discarded" against a host that is plainly a network rather than a shop. */
-const redirectors = [
-	"flexoffers.com", "flexlinkspro.com",
-	"pxf.io", "sjv.io", "prf.hn", //Impact
-	"anrdoezrs.net", "dpbolvw.net", "jdoqocy.com", "kqzyfj.com", "tkqlhce.com", //CJ
-	"linksynergy.com", //Rakuten
-	"shareasale.com", "avantlink.com", "awin1.com", "zenaps.com",
-	"redirectingat.com", "skimresources.com", //Skimlinks
-	"go.redirectingat.com", "howl.link", "narrativ.com",
-	"connexity.net", "bfxxr.com", "viglink.com"
-];
-
 /**
  * Registrable-ish host of a URL or bare hostname, lowercased, `www` and any
  * port removed, for comparing one against another.
@@ -2495,77 +2485,6 @@ const hostOf = value => ("" + value).toLowerCase()
 	.replace(/:\d+$/, "")
 	.replace(/^www\./, "")
 	.replace(/\.$/, "");
-
-/**
- * Whether a destination is an affiliate network rather than a shop - transit
- * on the way to the merchant, and as far as the service's cached answer goes.
- * @function
- * @param {string} url - The destination to test.
- * @returns {boolean} true if this is a known network
- */
-const isRedirector = url =>
-{
-	const host = hostOf(url);
-	return redirectors.some(domain => host === domain || host.endsWith("." + domain));
-};
-
-/**
- * Unmasks a resolver response. The body is XOR'd against the id it was asked
- * for, so the id used here must be the one that was sent.
- * @function
- * @param {string} id - The id the response was requested under.
- * @param {ArrayBuffer} response - The raw response body.
- * @returns {string} the destination, or "" if there was nothing usable
- */
-const decodeResolved = (id, response) =>
-{
-	if (!response || response instanceof Response || response.byteLength === 0)
-		return "";
-
-	const bytes = new Uint8Array(response);
-	const k = new TextEncoder().encode(id);
-	const r = new Uint8Array(bytes.length).map((_, i) => bytes[i] ^ bytes[i - 1] ^ k[i % k.length]);
-	const text = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
-	return /^https?:\/\//.test(text) ? text : "";
-};
-
-/**
- * Asks again under an id the service cannot already hold an answer for, to get
- * the merchant URL instead of an affiliate network's first hop.
- *
- * The service answers a *known* id from its cache, and for some links what it
- * cached is the network's first hop - `flexoffers.com/links/?cid=…`. Asked an
- * id it holds nothing for, it resolves on demand, follows the chain and returns
- * the merchant URL. The only way to make the id novel is to alter the request,
- * since the service derives the id from the URL and refuses a pair that
- * disagrees, so `lno` is replaced with this link's cache key.
- *
- * **That is destructive in general** - `lno` selects the variant on a deal
- * body's links, and perturbing it once rewrote seven colour links to the deal's
- * default product (26.11.15, reverted in 26.11.20). It is safe *here* only
- * because of where this is called from and what the caller does with the
- * answer: only when the natural answer is a network, and only if what comes
- * back matches the host the anchor states. A link whose answer is already the
- * merchant never reaches this.
- * @function
- * @param {URL} urlObject - The original link.
- * @param {string} key - This link's cache key, used as the replacement index.
- * @returns {Promise<string>} the destination, or "" if it could not be had
- */
-const resolveFinalHop = (urlObject, key) =>
-{
-	const urlFresh = new URL(urlObject);
-	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
-	const idFresh = getUrlId(urlFresh);
-	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
-	 * link, and the service does not recognise those. */
-	if (!idFresh || /crc$/.test(idFresh))
-		return Promise.resolve("");
-
-	return resolveUrl(idFresh, urlFresh.href)
-		.then(response => decodeResolved(idFresh, response))
-		.catch(() => "");
-};
 
 const isDestinationPlausible = (() =>
 {
@@ -2591,25 +2510,7 @@ const isDestinationPlausible = (() =>
 		if (!aStated)
 			return true;
 
-		if (aHost === aStated || aHost.endsWith("." + aStated) || aStated.endsWith("." + aHost))
-			return true;
-
-		/* An affiliate network is transit, not a destination, and never another
-		 * link's answer - so it is not a contradiction and must not be rejected.
-		 *
-		 * Measured live: both timex.com links on thread 19856376 resolve to
-		 * `flexoffers.com/links/?cid=<unique per link>&p=170370`, a correct
-		 * per-link answer that this check threw away for stating the wrong host,
-		 * leaving them unwrapped. The service returns the network's first hop when
-		 * answering from its cache and the final merchant URL when it resolves on
-		 * demand; both are right, and only the first looks wrong here.
-		 *
-		 * A list, because there is no way to tell a redirector from a merchant by
-		 * shape - the answer is opaque (`?cid=…&p=…`, nothing naming timex). It
-		 * needs adding to when an unfamiliar network turns up: the symptom is a
-		 * link that stays unresolved with a "destination discarded" line naming a
-		 * host that is plainly a network rather than a shop. */
-		return isRedirector(aHost);
+		return aHost === aStated || aHost.endsWith("." + aStated) || aStated.endsWith("." + aHost);
 	};
 })();
 
