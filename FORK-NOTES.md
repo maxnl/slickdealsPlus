@@ -84,7 +84,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
 | 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
 | 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
-| 26.11.26 | — | A post link is asked for under an id that identifies it - one request instead of two, and a failure is remembered |
+| 26.11.26 | — | **The deal button and image could never hit the cache** - plus one request per post link, and remembered failures |
 
 ---
 
@@ -430,6 +430,29 @@ entries in both directions. The 7 that diverge are exactly the post links whose 
 with another link's destination - the entry we would be sharing is the wrong one, so not sharing it
 is the point. Nothing overwrites an upstream entry; the divergent ids are additional, deterministic,
 and asked at most once per link thanks to the local cache.
+
+**A cache nobody can read is not a cache** (26.11.26). Asked whether the local cache was really being
+used, the answer turned out to be "not for the two most-used links on a deal page". `getCacheKey()`
+strips the parameters that change between pageviews, and two of them were missing: `pv` and `au`.
+
+Measured by keying two fetches of thread 19854408 taken a day apart: 12 of 14 links kept their key,
+and the 2 that did not were the deal's own `Get Deal at Amazon` button and its image. Their key was
+different on every pageview, so the entry written on one load could never be found on the next, and
+those two links re-asked the service on **every single page load, for the life of the install** -
+while looking perfectly healthy, because they always resolved. With `pv` and `au` stripped, 14 of 14
+are stable. Every key changes shape, so the cache is cleared once on upgrade.
+
+`trd` was stripped too, briefly, and then put back - which is the more interesting half. It is only
+the anchor's text and cannot affect a destination, and stripping it merges the sticky-bar button with
+the deal image, saving a request. But links in different posts of one thread are
+`sdtid=<thread>&lno=<n>&sdfid=9`, where `lno` restarts in every post and `sdfid` is the *forum*, not
+the post. Strip `trd` as well and two posts' first links key identically - one destination handed to
+two different links, which is the exact bug this key exists to prevent, reintroduced in the name of
+saving one request.
+
+The generalisation, and it cuts both ways from the note above: over-stripping is only safe while
+something else still tells two links apart. Check what that something is before removing anything -
+here it was the one parameter that looked most obviously useless.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
