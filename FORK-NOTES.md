@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.25** |
+| Current | **v26.11.26** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -84,6 +84,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
 | 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
 | 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
+| 26.11.26 | — | A post link is asked for under an id that identifies it - one request instead of two |
 
 ---
 
@@ -369,6 +370,36 @@ only after confirming it fails on the shipped 26.11.24 and passes on the fix.
 
 The wider point, and the third time this file has had to make it: *proving the mechanism* and
 *proving this build has the mechanism* are different claims. The first was true throughout.
+
+**Measure the thing before accepting its cost** (26.11.26). The two-request path was accepted as the
+price of keeping a deal body's colour links intact, on the belief that any unique id costs a second
+request. maxnl pushed back on that, and the belief did not survive contact with the service.
+
+Measured against the live resolver on thread 19854408 - curl-to-curl, which is valid for
+perturbation-invariance because both requests carry the same `u3`; only *where a link goes* needs a
+browser:
+
+| link class | natural id | asked naturally | perturbed |
+|---|---|---|---|
+| deal body (`pno` present) | already unique per link | all 8 colours -> their own ASIN, 1 request | `lno` replaced: all collapse to `B0GTNLL1H8`. `pcoid` added: Khaki -> `B0H2CM94NK` (wrong), Black -> correct |
+| post link (`lno`, no `pno`) | `<sdtid>sdtid<lno>lno`, shared by the first link of every post | rei.com link -> the thread's amazon product | `lno` replaced -> its own rei.com URL, first time |
+
+Two things fall out. **A deal body's links never needed anything** - their ids are already unique and
+already right, so the whole cost was being paid by post links only. And **`pcoid` is worse than
+`lno`**: it was correct for Black and wrong for Khaki, so a single sample would have made it look
+safe. That is the 26.11.15 mistake exactly, and it was avoided this time only by testing two links
+instead of one.
+
+So the perturbation goes back, restricted to where the id is ambiguous by construction - `lno`
+present, `pno` absent - which is the rule 26.11.19 shipped and 26.11.20 reverted. Reading 26.11.19's
+`resolverRequest()` again: it returned the natural id whenever `pno` was present, so it never
+touched a deal body's links, and the collapse maxnl saw cannot have come from it. **The revert was
+aimed at the wrong thing, and the real cause of that collapse is still unexplained.** The one
+explanation that fits is that the browser's markup omits `pno` where the fetched markup carries it -
+which would make this rule unsafe, and is why it is not merged without checking the browser first.
+
+The generalisation: an accepted cost deserves the same scepticism as a bug report. "This is the price
+of correctness" is a claim, and it can be measured like any other.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the

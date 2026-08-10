@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.25
+// @version      26.11.26
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.25";
+const VERSION = "26.11.26";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.25";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! link resolving was broken in 26.11.23 and 26.11.24 - a function was deleted while still being called
-# the release now fails on a call to something that is not defined, which is how that shipped`;
+const CHANGES = `* a link in a post is asked for under an id that identifies it, so it resolves in one request instead of two
+# a deal's own links already have unique ids and are sent untouched - the colour variants keep their own products`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2099,38 +2099,32 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		/* Upstream's id, and the link's own href exactly as the page wrote it.
+		/* Ask under an id that identifies this link, not one it merely shares.
 		 *
-		 * 26.11.15 replaced `lno` with a crc-derived value here, to sidestep the
-		 * collision by asking under an id the service could not already hold an
-		 * answer for. That rested on `lno` being an index the destination did not
-		 * depend on - measured on one link, the rei.com post link, where changing
-		 * it did leave the answer intact. It is not true in general: a deal body's
-		 * variant links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and `lno` is
-		 * what selects the variant. Replacing it made Slickdeals fall back to the
-		 * deal's default product, so seven colour links that had resolved to their
-		 * own ASINs all resolved to one. Confirmed against the originals: Khaki
-		 * really goes to B0GTNMT45B and Black to B0GTNDJ3FZ.
+		 * askFor() perturbs `lno` only where the id is ambiguous by construction
+		 * - a post's links, which carry `lno` and no `pno`. A deal body's links
+		 * carry `pno`, their natural id is already unique, and they are sent
+		 * exactly as the page wrote them. `lno` selects the variant there, and
+		 * touching it collapses every colour onto the deal's default.
 		 *
-		 * So `lno` is not ours to touch, on any path. A wrong answer is rejected
-		 * and the link left alone, which is honest; a perturbed request can return
-		 * a different wrong answer, which is not. */
-		resolveUrl(id, elLink._hrefOrig)
+		 * This is one request, not two, for the links that used to need a second:
+		 * the answer to an id the service holds nothing for is resolved on demand
+		 * for this exact URL, so it cannot be another link's. It is still checked,
+		 * because it can still be an intermediate hop. */
+		const ask = askFor(urlObject, key, id);
+		resolveUrl(ask.id, ask.url)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
 					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + id + " original:" + elLink._hrefOrig*/);
 
-				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(id);
-				const r = new Uint8Array(response.length)
-					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
-
-				response = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
-				// console.log(id, response);
+				/* The body is XOR'd against the id it was asked for, so this must
+				 * decode with ask.id and not the natural id - they differ whenever
+				 * askFor() chose a unique one. */
+				response = decodeResolved(ask.id, response);
 				try
 				{
-					if (!/^https?:\/\//.test(response))
+					if (!response)
 						return;
 
 					/* An answer whose host is not the one the anchor states is one
@@ -2161,7 +2155,15 @@ const processLinks = (node, force) =>
 					 * default cannot be accepted in its place. */
 					if (!isDestinationPlausible(elLink, response))
 					{
-						return resolveFinalHop(urlObject, key).then(final =>
+						/* A unique ask has already been perturbed; asking again the
+						 * same way returns the same thing. Its fallback is the natural
+						 * id - which may be another link's answer, so it is checked
+						 * like everything else. Either way this caps at two requests
+						 * and is one in the common case. */
+						const again = ask.unique
+							? resolveNatural(id, elLink._hrefOrig)
+							: resolveFinalHop(urlObject, key);
+						return again.then(final =>
 						{
 							if (!final || !isDestinationPlausible(elLink, final))
 							{
@@ -2562,6 +2564,68 @@ const resolveFinalHop = (urlObject, key) =>
 		.then(response => decodeResolved(idFresh, response))
 		.catch(() => "");
 };
+
+/**
+ * Chooses the id to ask under, and the URL to send with it.
+ *
+ * Measured against the live service, thread 19854408 (`test/`, and the numbers
+ * are in FORK-NOTES):
+ *
+ * - A deal body's links carry `pno`, and their natural id is already unique per
+ *   link - `1311423pno19854408sdtid3lno`. Asked under it, all eight colour links
+ *   come back with their own ASIN, in one request each. **Nothing to improve,
+ *   and everything to lose:** replacing `lno` collapses all eight onto the deal's
+ *   default, and adding `pcoid` rewrote Khaki to a different product while
+ *   leaving Black intact - inconsistent, which is worse than uniformly wrong,
+ *   because one sample makes it look safe.
+ *
+ * - A post's links carry `lno` and no `pno`, so their id is `<sdtid>sdtid<lno>lno`
+ *   and `lno` restarts at 1 in every post: the first link of every post in a
+ *   thread shares one id, and the service answers all of them with whatever it
+ *   holds. The rei.com link asked naturally returns the thread's amazon product;
+ *   asked with `lno` replaced it returns its own rei.com URL, first time.
+ *
+ * So the perturbation is applied exactly where the id is ambiguous by
+ * construction, and never where it is not. That is the same rule 26.11.19 used
+ * and 26.11.20 reverted - reverted because a deal body's colour links collapsed,
+ * which this rule does not touch, so the collapse had another cause and the
+ * revert was aimed at the wrong thing.
+ * @function
+ * @param {URL} urlObject - The link.
+ * @param {string} key - This link's cache key.
+ * @param {string} id - The natural, upstream-shaped id.
+ * @returns {{id: string, url: string, unique: boolean}} what to send
+ */
+const askFor = (urlObject, key, id) =>
+{
+	const queryObject = new URLSearchParams(urlObject.search);
+	if (!queryObject.has("lno") || queryObject.has("pno"))
+		return {id: id, url: urlObject.href, unique: false};
+
+	const urlFresh = new URL(urlObject);
+	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
+	const idFresh = getUrlId(urlFresh);
+	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
+	 * link, and the service does not recognise those. */
+	if (!idFresh || /crc$/.test(idFresh))
+		return {id: id, url: urlObject.href, unique: false};
+
+	return {id: idFresh, url: urlFresh.href, unique: true};
+};
+
+/**
+ * Asks under the natural, unmodified id - the fallback when a unique ask came
+ * back somewhere the anchor does not state. Nothing is perturbed here, so this
+ * is always safe to call; it just may be answered with another link's
+ * destination, which is why the caller checks it too.
+ * @function
+ * @param {string} id - The natural id.
+ * @param {string} href - The link's own href, exactly as the page wrote it.
+ * @returns {Promise<string>} the destination, or "" if it could not be had
+ */
+const resolveNatural = (id, href) => resolveUrl(id, href)
+	.then(response => decodeResolved(id, response))
+	.catch(() => "");
 
 const isDestinationPlausible = (() =>
 {

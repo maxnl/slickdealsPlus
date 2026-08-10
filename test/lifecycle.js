@@ -21,11 +21,13 @@ const blocks = [
 	cut("const isHostShaped = value =>", ".test(value);"),
 	cut("const decodeResolved = (id, response) =>", "\n};"),
 	cut("const resolveFinalHop = (urlObject, key) =>", "\n};"),
+	cut("const askFor = (urlObject, key, id) =>", "\n};"),
+	cut("const resolveNatural = (id, href) =>", '.catch(() => "");'),
 	cut("const isDestinationPlausible = (() =>", "\n})();"),
 ];
 const NET = { calls: [] };
 const shipped = new Function("resolveUrl", "TextEncoder", "TextDecoder",
-	blocks.join("\n") + "\nreturn {getCacheKey,getUrlId,isDestinationPlausible,resolveFinalHop,decodeResolved};");
+	blocks.join("\n") + "\nreturn {getCacheKey,getUrlId,isDestinationPlausible,resolveFinalHop,decodeResolved,askFor,resolveNatural};");
 
 // stubbed transport: records every request the script would make
 const WORLD = {};                       // id -> destination the service answers
@@ -58,12 +60,13 @@ const visit = async (href, stated) => {
 	if (url) return { outcome: "CACHE HIT", requests: 0, dest: url };
 
 	const before = NET.calls.length;
-	const raw = await resolveUrl(id, href);
-	let response = S.decodeResolved(id, raw);
+	const ask = S.askFor(urlObject, key, id);
+	const raw = await resolveUrl(ask.id, ask.url);
+	let response = S.decodeResolved(ask.id, raw);
 	if (!response) return { outcome: "no answer", requests: NET.calls.length - before, dest: "" };
 
 	if (!S.isDestinationPlausible(elLink, response)) {
-		const final = await S.resolveFinalHop(urlObject, key);
+		const final = ask.unique ? await S.resolveNatural(id, href) : await S.resolveFinalHop(urlObject, key);
 		if (!final || !S.isDestinationPlausible(elLink, final))
 			return { outcome: "REJECTED (link left alone)", requests: NET.calls.length - before, dest: "" };
 		cache.set(key, final);
