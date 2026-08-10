@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.19
+// @version      26.11.20
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.19";
+const VERSION = "26.11.20";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.19";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `+ free highlighting and Free Only now work in the homepage list view and the /deals/ list view
-# neither renders a comparison price, and the list view shows no vote count, so price-difference and score highlighting cannot apply there`;
+const CHANGES = `! a deal body's colour links all resolved to the deal's default product instead of their own
+# the link index that selects the variant was being replaced before the lookup; it is left alone now`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2099,22 +2099,30 @@ const processLinks = (node, force) =>
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		/* A unique id brings its own URL, carrying the replaced index; anything
-		 * asked under upstream's id is sent the link's own href untouched. */
-		/* Which id to ask under. A link whose id is ambiguous by construction is
-		 * asked uniquely from the start rather than being asked, disbelieved and
-		 * asked again - see resolverRequest(). A unique id brings its own URL,
-		 * carrying the replaced index; anything else sends the link's own href. */
-		const request = resolverRequest(urlObject, key, id);
-
-		resolveUrl(request.id, request.url || elLink._hrefOrig)
+		/* Upstream's id, and the link's own href exactly as the page wrote it.
+		 *
+		 * 26.11.15 replaced `lno` with a crc-derived value here, to sidestep the
+		 * collision by asking under an id the service could not already hold an
+		 * answer for. That rested on `lno` being an index the destination did not
+		 * depend on - measured on one link, the rei.com post link, where changing
+		 * it did leave the answer intact. It is not true in general: a deal body's
+		 * variant links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and `lno` is
+		 * what selects the variant. Replacing it made Slickdeals fall back to the
+		 * deal's default product, so seven colour links that had resolved to their
+		 * own ASINs all resolved to one. Confirmed against the originals: Khaki
+		 * really goes to B0GTNMT45B and Black to B0GTNDJ3FZ.
+		 *
+		 * So `lno` is not ours to touch, on any path. A wrong answer is rejected
+		 * and the link left alone, which is honest; a perturbed request can return
+		 * a different wrong answer, which is not. */
+		resolveUrl(id, elLink._hrefOrig)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
-					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + request.id + " original:" + request.url*/);
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + id + " original:" + elLink._hrefOrig*/);
 
 				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(request.id);
+				const k = new TextEncoder().encode(id);
 				const r = new Uint8Array(response.length)
 					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
 
@@ -2125,57 +2133,24 @@ const processLinks = (node, force) =>
 					if (!/^https?:\/\//.test(response))
 						return;
 
-					/* The service answers an ambiguous id with one destination for
-					 * every link that shares it. Rather than give up on the link,
-					 * ask again under an id that cannot already hold an answer -
-					 * see resolveFresh(), which the service resolves on demand.
-					 * Returning the promise keeps it inside this chain, so the
-					 * in-flight accounting in .finally() still runs exactly once.
-					 *
-					 * If the retry comes back empty the link keeps its original
-					 * href and stays notResolved, which is what it would do if the
-					 * service had no answer at all. */
-					/* The check exists to catch one thing: an answer that belongs to
-					 * a different link sharing this one's id. An answer to a unique
-					 * id cannot be that - it was resolved for this exact URL - so it
-					 * is not checked at all, the same reasoning that lets the retry
-					 * below apply its answer unexamined.
-					 *
-					 * Do not reintroduce a check here on the strength of an answer
-					 * measured outside a browser. The service resolves from `u3`,
-					 * and `u3` differs between a signed-out fetch of a page and a
-					 * real session: the same timex.com link answered
-					 * www.flexoffers.com to a curl-fetched URL and the true
-					 * timex.com product URL to a browser's. Anything derived from
-					 * the former describes the fetch, not the link. */
-					if (!request.unique && !isDestinationPlausible(elLink, response))
+					/* The service answers a colliding id with one destination for
+					 * every link that shares it, so an answer the anchor itself
+					 * contradicts is not applied and not cached. The link keeps its
+					 * original href and stays notResolved - it still reaches the
+					 * right page through Slickdeals' own redirect, it just loses
+					 * the unwrap. There is no second question worth asking: every
+					 * way of re-asking means altering the request, and `lno` is
+					 * exactly what a deal body's variant links encode. */
+					if (!isDestinationPlausible(elLink, response))
 					{
 						debug(debugPrefix + "%cresolved destination discarded, wrong site for this link",
 							"color:red",
 							"color:#656",
-							request.id,
+							id,
 							elLink._hrefOrig,
 							response
 						);
-						return resolveFresh(urlObject, key).then(fresh =>
-						{
-							if (!fresh)
-								return response;
-
-							debug(debugPrefix + "%cresolved again under a fresh id",
-								"color:green",
-								"color:#656",
-								request.id,
-								elLink._hrefOrig,
-								fresh
-							);
-							SETTINGS(key, fresh);
-							for(let i = 0; i < aLinks.length; i++)
-								linkUpdate(aLinks[i], fresh);
-
-							aLinks.resolved = true;
-							return fresh;
-						});
+						return response;
 					}
 
 					SETTINGS(key, response);
@@ -2226,7 +2201,7 @@ const processLinks = (node, force) =>
 					"color:red",
 					"color:#656",
 					error,
-					request.id,
+					id,
 					elLink._hrefOrig
 				);
 			});
@@ -2332,139 +2307,6 @@ const updateLinks = () =>
 const resolveUrl = (id, url) => fetch(api + VERSION + "/" + id, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
 	.catch(fVoid);
-
-/**
- * Unmasks a resolver response. The body is XOR'd against the id it was asked
- * for, so the id used here must be the one that was sent.
- * @function
- * @param {string} id - The id the response was requested under.
- * @param {ArrayBuffer} response - The raw response body.
- * @returns {string} the destination, or "" if there was nothing usable
- */
-const decodeResolved = (id, response) =>
-{
-	if (!response || response instanceof Response || response.byteLength === 0)
-		return "";
-
-	const bytes = new Uint8Array(response);
-	const k = new TextEncoder().encode(id);
-	const r = new Uint8Array(bytes.length).map((_, i) => bytes[i] ^ bytes[i - 1] ^ k[i % k.length]);
-	const text = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
-	return /^https?:\/\//.test(text) ? text : "";
-};
-
-/**
- * Asks the resolver again under an id it cannot already hold an answer for.
- *
- * The resolver caches by the id it is given, and `lno` - the link index within
- * a post - restarts at 1 in every post, so the first link of every post in a
- * thread is asked under one id (`19854408sdtid1lno`) and they all get back
- * whichever destination was recorded first. That is why a post linking to
- * rei.com resolves to the thread's own amazon.com product.
- *
- * The service is not only a cache, though: an id it holds no entry for is
- * resolved on demand. Measured on the rei.com link, which the colliding id
- * answers wrongly:
- *
- *     19854408sdtid1lno    -> https://www.amazon.com/gp/product/B0GTNLL1H8/...
- *     19854408sdtid999lno  -> https://www.rei.com/learn/expert-advice/sun-protection.html
- *
- * So `lno` is replaced with this link's own cache key, which is unique per link
- * and stable across page loads, and the id is re-derived from the modified URL.
- * Both matter: the service checks that the id in the path agrees with the URL
- * in the body and refuses the pair outright if it does not, which is what made
- * an earlier collision-free getUrlId() 404 every lookup. `lno` is safe to
- * change because the destination is carried in `u3`, not in the index.
- *
- * An answer that comes back from this cannot be a collision - it was resolved
- * for this exact URL - so it is taken as authoritative and not re-checked.
- * @function
- * @param {URL} urlObject - The original link.
- * @param {string} key - This link's cache key, used as the replacement index.
- * @returns {Promise<string>} the destination, or "" if it could not be had
- */
-const uniqueRequest = (urlObject, key) =>
-{
-	const urlFresh = new URL(urlObject);
-	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
-	const id = getUrlId(urlFresh);
-	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
-	 * link. The service does not recognise those - a crc id 404s - so there is
-	 * nothing to be gained by asking under one. */
-	return id && !/crc$/.test(id) ? {id: id, url: urlFresh.href} : undefined;
-};
-
-/**
- * Chooses the id a link is asked under.
- *
- * A link carrying `lno` but no `pno` is a post-content link, and `lno` is the
- * index within a post, so it restarts at 1 in every post: the first link of
- * every post in a thread derives one id and the service answers all of them
- * with whichever destination was recorded first. That is knowable from the
- * link alone, before anything is asked, so those go straight to a unique id
- * instead of spending a request on an answer that cannot be trusted and then
- * spending a second one to repair it.
- *
- * Deal-body links carry `pno`, which makes their ids unique already - all seven
- * colour variants of the fixture thread always resolved correctly - so they
- * keep asking under upstream's id and keep the benefit of the shared cache.
- *
- * Ambiguous is not the same as wrong: a post link whose destination happens to
- * be the one recorded resolves correctly under either id. Asking under the
- * unique id is still the better trade, because it costs one request rather than
- * two whenever the answer would have been wrong, and never costs more than one.
- * The replacement index is this link's cache key, a deterministic crc32, so the
- * id is stable per link and shared by every user of this fork rather than
- * minting a fresh server-side entry per visit.
- *
- * `url` is only set when the id is a unique one, because only then does the URL
- * have to change: it carries the replaced index, and the service refuses a pair
- * whose id and URL disagree. A link asked under upstream's id is sent
- * `elLink._hrefOrig` unaltered, exactly as it was before this function existed.
- * Returning a re-serialised `urlObject.href` there instead would be equivalent -
- * `elLink.href` is already normalised, and 506 sampled links round-trip through
- * `new URL()` unchanged - but it is a difference on a path this change is not
- * meant to touch, and this repository's regressions have mostly been changes
- * that rode along beside a real fix.
- * @function
- * @param {URL} urlObject - The link being resolved.
- * @param {string} key - This link's cache key.
- * @param {string} id - The id upstream's scheme derives for this link.
- * @returns {Object} the `id` to ask with, whether it is unique, and for a unique
- *                   id the `url` that must accompany it
- */
-const resolverRequest = (urlObject, key, id) =>
-{
-	const queryObject = new URLSearchParams(urlObject.search);
-	if (!queryObject.has("lno") || queryObject.has("pno"))
-		return {id: id, unique: false};
-
-	const fresh = uniqueRequest(urlObject, key);
-	if (!fresh)
-		return {id: id, unique: false};
-
-	return {id: fresh.id, url: fresh.url, unique: true};
-};
-
-/**
- * Asks the resolver again under an id it cannot already hold an answer for,
- * after an answer has been rejected. See resolverRequest() for the ids that
- * skip this by being asked uniquely in the first place.
- * @function
- * @param {URL} urlObject - The original link.
- * @param {string} key - This link's cache key, used as the replacement index.
- * @returns {Promise<string>} the destination, or "" if it could not be had
- */
-const resolveFresh = (urlObject, key) =>
-{
-	const fresh = uniqueRequest(urlObject, key);
-	if (!fresh)
-		return Promise.resolve("");
-
-	return resolveUrl(fresh.id, fresh.url)
-		.then(response => decodeResolved(fresh.id, response))
-		.catch(() => "");
-};
 
 /**
 * Extracts the ID and type of a deal from a given URL.
