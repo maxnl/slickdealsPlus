@@ -47,6 +47,7 @@ const S = shipped(resolveUrl, TextEncoder, TextDecoder);
 /* processLinks()'s control flow for one link, transcribed from the shipped
  * source (the surrounding loop is not extractable - it is inside a 90-line
  * function - so the FLOW is mirrored and every DECISION is delegated). */
+const RETRY_AFTER = Number(new Function(cut("const RESOLVE_RETRY_AFTER =", ";") + "\nreturn RESOLVE_RETRY_AFTER;")());
 const cache = new Map();                                  // the localStorage link cache
 const visit = async (href, stated) => {
 	const urlObject = new URL(href);
@@ -57,6 +58,12 @@ const visit = async (href, stated) => {
 
 	const q = new URLSearchParams(urlObject.search);
 	let url = q.has("u2") ? q.get("u2") : cache.get(key);
+	// remembered failure, as shipped: [ "", when ], expiring after RESOLVE_RETRY_AFTER
+	if (Array.isArray(url) && !url[0]) {
+		if (Date.now() - (url[1] || 0) < RETRY_AFTER)
+			return { outcome: "remembered failure", requests: 0, dest: "" };
+		url = "";
+	}
 	if (url) return { outcome: "CACHE HIT", requests: 0, dest: url };
 
 	const before = NET.calls.length;
@@ -67,8 +74,10 @@ const visit = async (href, stated) => {
 
 	if (!S.isDestinationPlausible(elLink, response)) {
 		const final = ask.unique ? await S.resolveNatural(id, href) : await S.resolveFinalHop(urlObject, key);
-		if (!final || !S.isDestinationPlausible(elLink, final))
+		if (!final || !S.isDestinationPlausible(elLink, final)) {
+			cache.set(key, ["", Date.now()]);
 			return { outcome: "REJECTED (link left alone)", requests: NET.calls.length - before, dest: "" };
+		}
 		cache.set(key, final);
 		return { outcome: "retry -> FOLLOWED ON", requests: NET.calls.length - before, dest: final };
 	}

@@ -84,7 +84,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
 | 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
 | 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
-| 26.11.26 | — | A post link is asked for under an id that identifies it - one request instead of two |
+| 26.11.26 | — | A post link is asked for under an id that identifies it - one request instead of two, and a failure is remembered |
 
 ---
 
@@ -400,6 +400,36 @@ which would make this rule unsafe, and is why it is not merged without checking 
 
 The generalisation: an accepted cost deserves the same scepticism as a bug report. "This is the price
 of correctness" is a claim, and it can be measured like any other.
+
+**`u3` is the condition; `pno` was a symptom of it.** The rule above was first written as "`lno`
+present, `pno` absent", which is what 26.11.19 used. maxnl asked whether the `u3` details were right,
+and checking them produced the better rule.
+
+`u3` carries the destination itself, encrypted. A link that has one can be resolved from the URL
+alone, so asking under an id the service holds nothing for makes it decrypt `u3` rather than answer
+from what it already holds - and what it already holds is another link's destination. A link with no
+`u3` has nothing in it to resolve from: the service identifies it by the parameters, `lno` among
+them, so changing `lno` asks about a different link. That is one mechanism explaining both halves of
+the table above, where `pno` only correlated.
+
+Measured over both fixture threads: every link that takes the perturbed path carries `u3` (3 of 3),
+and no deal-body link does (0 of 12). All three conditions are now required, so the markup would have
+to change in three ways at once before a deal's links could be perturbed - which also means the
+open question about whether the browser's markup carries `pno` no longer gates the change.
+
+Two `u3` invariants worth not breaking, both verified rather than assumed:
+
+- `getCacheKey()` **strips** `u3`, because it is per-pageview. Two loads of the same page give
+  different `u3` and must give the same key, or nothing would ever hit the local cache.
+- the perturbed request **keeps** `u3`, because it is the destination. Perturbing `lno` while
+  dropping `u3` would ask the service to resolve nothing.
+
+**Cache compatibility with upstream.** Of 45 resolver-bound links across both fixture threads, 38
+are sent with an id *and* URL byte-identical to what V@no's script sends, so those share his cached
+entries in both directions. The 7 that diverge are exactly the post links whose shared id answers
+with another link's destination - the entry we would be sharing is the wrong one, so not sharing it
+is the point. Nothing overwrites an upstream entry; the divergent ids are additional, deterministic,
+and asked at most once per link thanks to the local cache.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
