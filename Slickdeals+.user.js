@@ -35,6 +35,7 @@ const VERSION = "26.11.26";
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
 const CHANGES = `* a link in a post is asked for under an id that identifies it, so it resolves in one request instead of two
++ a link that resolves to nothing is remembered for a week instead of being asked again on every page load
 # a deal's own links already have unique ids and are sent untouched - the colour variants keep their own products`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
@@ -2042,6 +2043,25 @@ const processLinks = (node, force) =>
 		// {
 		// 	elLink.classList.add("alert");
 		// }
+		/* A remembered failure. The link asked, and what came back was not this
+		 * link's - re-asking on every load costs two requests each time, forever,
+		 * for exactly the links that can least afford it. It is not cached as a
+		 * destination, because there is no destination: the link keeps its own
+		 * href and still works. It is cached as "asked recently, got nowhere".
+		 *
+		 * Not permanent, deliberately. The answer lives on a service whose cache
+		 * changes, and a link unresolvable today can resolve next week, so this
+		 * lapses and lets the link try again rather than writing it off for the
+		 * life of the install. */
+		if (Array.isArray(url) && !url[0])
+		{
+			if (Date.now() - (url[1] || 0) < RESOLVE_RETRY_AFTER)
+			{
+				elLink.classList.add("notResolved");
+				continue;
+			}
+			url = "";
+		}
 		if (url)
 		{
 			if (Array.isArray(url))
@@ -2174,6 +2194,12 @@ const processLinks = (node, force) =>
 									elLink._hrefOrig,
 									response
 								);
+								/* Remember that this got nowhere, so it is not asked twice
+								 * again on the next load and every load after. Stored as
+								 * [ "", when ] - an empty destination, which the read path
+								 * already treats as nothing cached, plus the time, so it
+								 * expires on its own. See RESOLVE_RETRY_AFTER. */
+								SETTINGS(key, ["", Date.now()]);
 								return response;
 							}
 							debug(debugPrefix + "%cfollowed on to the host the link states",
@@ -2506,6 +2532,13 @@ const hostOf = value => ("" + value).toLowerCase()
  */
 const isHostShaped = value => /^[a-z\d-]+(?:\.[a-z\d-]+)*\.[a-z]{2,}$/.test(value);
 
+/* How long a link that resolved to nothing usable is left alone before being
+ * tried again. Long enough that an unresolvable link stops costing two requests
+ * on every page load - which was its standing cost - and short enough that the
+ * third-party service correcting its own cache is picked up without needing a
+ * new release. A week is well inside how long these links stay on a page. */
+const RESOLVE_RETRY_AFTER = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * Unmasks a resolver response. The body is XOR'd against the id it was asked
  * for, so the id used here must be the one that was sent.
@@ -2599,7 +2632,27 @@ const resolveFinalHop = (urlObject, key) =>
 const askFor = (urlObject, key, id) =>
 {
 	const queryObject = new URLSearchParams(urlObject.search);
-	if (!queryObject.has("lno") || queryObject.has("pno"))
+	/* `u3` is the condition that matters, and it explains the rest.
+	 *
+	 * `u3` carries the destination itself, encrypted. A link that has one can be
+	 * resolved from the URL alone, so an id the service holds nothing for simply
+	 * forces it to decrypt `u3` instead of answering from what it already has -
+	 * which is exactly what is wanted, because what it already has is another
+	 * link's destination. That is why the rei.com link comes back right when
+	 * asked freshly and wrong when asked naturally.
+	 *
+	 * A link with no `u3` has nothing in it to resolve from: the service has to
+	 * identify it by the parameters, `lno` among them, so changing `lno` asks
+	 * about a different link and gets a different product. That is the colour
+	 * variants, and it is why perturbing them collapses them onto the deal's
+	 * default.
+	 *
+	 * Measured over both fixture threads: every link that reaches the branch
+	 * below carries `u3` (3 of 3), and not one deal-body link does (12 of 12).
+	 * `pno` tracks the same split, but as a symptom - post links happen not to
+	 * have one. Requiring all three means the markup would have to change in
+	 * three ways at once before a deal's links could be perturbed. */
+	if (!queryObject.has("u3") || !queryObject.has("lno") || queryObject.has("pno"))
 		return {id: id, url: urlObject.href, unique: false};
 
 	const urlFresh = new URL(urlObject);

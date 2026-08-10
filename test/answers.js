@@ -7,11 +7,13 @@ const LINKS = [
   ["Amazon Black",  B+"trd=Black&pno=1311423&sdtid=19854408&lno=6", "amazon.com"],
   ["Get Deal btn",  B+"trd=Get%20Deal%20at%20Amazon&pno=1311423&sdtid=19854408", "amazon.com"],
   // post-content links: sdtid + lno, NO pno -> id collides across posts
-  ["REI post link", B+"trd=sun%20protection&sdtid=19854408&lno=1", "rei.com"],
-  ["Timex post 1",  B+"trd=Timex%20watch&sdtid=19856376&lno=1",    "timex.com"],
-  ["Timex post 2",  B+"trd=summer%20sale&sdtid=19856376&lno=2",    "timex.com"],
+  ["REI post link", B+"trd=sun%20protection&sdtid=19854408&lno=1&u3=ENC1", "rei.com"],
+  ["Timex post 1",  B+"trd=Timex%20watch&sdtid=19856376&lno=1&u3=ENC2",    "timex.com"],
+  ["Timex post 2",  B+"trd=summer%20sale&sdtid=19856376&lno=2&u3=ENC3",    "timex.com"],
 ];
 
+// u3 on post links, none on deal-body links - that is the measured markup
+// (post links 3 of 3 carry u3; deal-body links 0 of 12)
 // what the service answers for each id it already holds
 for (const [name, href] of LINKS.map(l => [l[0], l[1]])) {
   const u = new URL(href); const id = S.getUrlId(u);
