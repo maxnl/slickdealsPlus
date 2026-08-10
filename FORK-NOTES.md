@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.20** |
+| Current | **v26.11.21** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -78,7 +78,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.17 | [#43](https://github.com/maxnl/slickdealsPlus/pull/43) | Shared-id requests send the link's own href again (no behaviour change) |
 | 26.11.18 | [#45](https://github.com/maxnl/slickdealsPlus/pull/45) | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
 | 26.11.19 | [#46](https://github.com/maxnl/slickdealsPlus/pull/46) | Free highlighting reaches the homepage list view and the `/deals/` list view |
-| 26.11.20 | — | **`lno` perturbation reverted - deal-body variant links resolved to the deal's default product** |
+| 26.11.20 | [#47](https://github.com/maxnl/slickdealsPlus/pull/47) | **`lno` perturbation reverted - deal-body variant links resolved to the deal's default product** |
+| 26.11.21 | — | An affiliate network is no longer read as a contradicting destination |
 
 ---
 
@@ -287,6 +288,23 @@ mistake.
 The failure is the same shape as #1, committed in the same breath as a warning about it. The rule
 that would have caught it: find the case that tells your explanation apart from its rival, and test
 *that* one.
+
+**A check needs its false positives measured, not assumed** (26.11.13 -> 26.11.21). `isDestinationPlausible()`
+rejects an answer whose host contradicts the one the anchor states. Twice this session a false
+positive was suspected, then dismissed as an artifact of fetching pages outside a browser - and it
+was real. Measured from maxnl's own session with Debug on: both `timex.com` links on thread 19856376
+resolve to `flexoffers.com/links/?cid=<unique per link>&p=170370`, correct per-link answers thrown
+away for naming an affiliate network rather than the shop.
+
+An affiliate network is transit, never another link's destination, so it cannot be the collision the
+check exists to catch. 26.11.21 passes a list of them through. The answer is opaque - `?cid=…&p=…`,
+nothing in it names timex - so there is no way to recognise one by shape; the list needs adding to
+when an unfamiliar network appears, and the symptom is a link that stays unresolved with a
+"destination discarded" line naming something that is plainly a network rather than a shop.
+
+Also worth knowing: the service returns the network's **first hop** when answering from its cache and
+the **final merchant URL** when it resolves on demand. Both are correct; only the first looks wrong
+to a host comparison.
 
 **One sample cannot tell you a parameter is inert** (26.11.14 -> 26.11.20). Perturbing `lno` to
 dodge the id collision was measured on exactly one link, the rei.com post link, where the answer
