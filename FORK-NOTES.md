@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.19** |
+| Current | **v26.11.20** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -77,7 +77,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.16 | [#42](https://github.com/maxnl/slickdealsPlus/pull/42) | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
 | 26.11.17 | [#43](https://github.com/maxnl/slickdealsPlus/pull/43) | Shared-id requests send the link's own href again (no behaviour change) |
 | 26.11.18 | [#45](https://github.com/maxnl/slickdealsPlus/pull/45) | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
-| 26.11.19 | — | Free highlighting reaches the homepage list view and the `/deals/` list view |
+| 26.11.19 | [#46](https://github.com/maxnl/slickdealsPlus/pull/46) | Free highlighting reaches the homepage list view and the `/deals/` list view |
+| 26.11.20 | — | **`lno` perturbation reverted - deal-body variant links resolved to the deal's default product** |
 
 ---
 
@@ -177,60 +178,26 @@ Rejection is deliberately conservative: the link keeps its original href, stays 
 still reaches the correct page through Slickdeals' redirect. What it loses is the unwrap, not the
 destination.
 
-**A rejected answer is asked again under a unique id** (26.11.14). Rejecting a wrong destination
-leaves the link unwrapped, which is safe but not the point of the script. Since the service resolves
-any id it holds no entry for, `resolveFresh()` replaces `lno` with the link's own cache key and
-re-derives the id from the modified URL, so the collision cannot happen and the answer is resolved
-for that exact link:
+**Perturbing `lno` was tried, and reverted** (26.11.14 -> 26.11.20). The service resolves any id it
+holds no entry for, so a rejected answer could be re-asked under an id it could not already have -
+`resolveFresh()` replaced `lno` with the link's own cache key and re-derived the id; 26.11.15 went
+further and sent post-content links there from the start. On the rei.com post link it worked, and
+that link was the only one it was measured on.
 
-```
-19854408sdtid1lno           -> amazon.com/gp/product/B0GTNLL1H8   (cached, wrong)
-19854408sdtid1433451321lno  -> rei.com/learn/expert-advice/...     (fresh, right)
-```
+**`lno` is not an index the destination is independent of.** A deal body's variant links are
+`&lno=3&trd=Khaki`, `&lno=6&trd=Black`: `lno` is what selects the variant. Replacing it made
+Slickdeals fall back to the deal's default product, so seven colour links that each had their own
+ASIN all resolved to one. Confirmed against the untouched originals in a browser - Khaki really goes
+to `B0GTNMT45B`, Black to `B0GTNDJ3FZ`, while every one of them was being rewritten to `B0H2CM94NK`.
 
-Both halves are sent because the service checks that the id agrees with the URL. The cache key is
-stable per link, so a repeat visit reuses the entry rather than minting another - and because it is a
-deterministic crc32, every user of this fork derives the same unique id, so the shared cache still
-does its job. Every failure path yields `""` and writes nothing: `decodeResolved()` rejects an absent
-body, a non-ok `Response`, an empty buffer and anything that does not decode to an `http(s)` URL. The
-retry is chained inside the existing promise so the in-flight accounting in `.finally()` still runs
-once per link.
+So `lno` is not ours to touch, on any path, and 26.11.20 removed the machinery entirely. A colliding
+answer is rejected and the link left alone: it keeps its original href, stays `notResolved`, and
+still reaches the right page through Slickdeals' own redirect - it only loses the unwrap. That is
+honest. A perturbed request that returns a *different* wrong answer is not, and cannot be told from
+a right one.
 
-**An ambiguous id is recognised before it is asked** (26.11.15). Whether an id can collide is
-knowable from the link alone: `lno` present and `pno` absent means a post-content link, whose index
-restarts in every post. `resolverRequest()` sends those to a unique id from the start, so a link
-whose answer would have been wrong costs one request rather than two, and never costs more than one.
-Deal-body links carry `pno`, are unique already, and keep asking under upstream's id.
-
-**An answer to a unique id is not checked at all - on either path.** The check exists to catch one
-thing, an answer belonging to a different link that shares this one's id, and an answer resolved for
-this exact URL cannot be that. This has to hold for the cache as well as for a fresh answer:
-`resolverRequest()` is therefore called before the cached-destination branch, not just before the
-request. Checking only on the way out of the cache would discard a destination that was applied
-unchecked when it arrived, re-request it, apply the same answer again and cache it again - once per
-page load, indefinitely. This is the same reasoning that lets the retry apply its answer unexamined, and
-applying it to both paths is what keeps them consistent: the first draft of this change trusted an
-answer arriving by one route and rejected the identical answer arriving by the other.
-
-**The service resolves from `u3`, and `u3` is not the same outside a browser.** A signed-out `curl`
-fetch of a page yields links whose `u3` encodes a different destination from the one a real session
-gets. The same `timex.com` link answered `www.flexoffers.com` for a curl-fetched URL and the true
-`timex.com` product URL - `?cjdata=…&utm_campaign=…FlexOffers.com` - in a browser with the link cache
-cleared. Both answers are honest replies to different questions.
-
-This invalidates measurements taken here from outside a browser, including the claim recorded in an
-earlier draft that the host check has a "known false positive" on affiliate hops. It does not, on the
-evidence available: in a real session that link resolves to the host the anchor states. The
-comparison of shared against unique ids over 26 post-content links was apples-to-apples (both used
-the same `u3`), but its absolute destinations describe the fetch and not the link, so it cannot rule
-out the shared id being better in a real session. **Verify from a browser before trusting anything in
-this section.**
-
-**Failure handling** (#36). The promise chain ended in `.catch(console.error)`, so every unresolvable
-link printed a red stack trace; a page carries hundreds. Now routed through `debug()`. The group
-reclaim test changed from "did it resolve" to "is anything still in flight", which fixes a leak
-(failed groups were never reclaimed) and a hazard in the other direction (a group with a second
-request in flight could be deleted out from under that request's closure).
+The cost is the rei.com post link, which goes back to not unwrapping. That is the correct trade:
+one link left alone against seven rewritten to the wrong product.
 
 ### The classic (vBulletin) layout
 
@@ -320,6 +287,25 @@ mistake.
 The failure is the same shape as #1, committed in the same breath as a warning about it. The rule
 that would have caught it: find the case that tells your explanation apart from its rival, and test
 *that* one.
+
+**One sample cannot tell you a parameter is inert** (26.11.14 -> 26.11.20). Perturbing `lno` to
+dodge the id collision was measured on exactly one link, the rei.com post link, where the answer
+survived the change. That licensed treating `lno` as an index the destination does not depend on. It
+is not: a deal body's variant links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and `lno` selects the
+variant. Seven colour links each with their own ASIN all resolved to the deal's default product.
+
+The same mistake as 26.11.13's `trd` reading, in the same place, three days apart - and with the
+lesson from it already written in this file. Validating on one sample tells you the sample is
+consistent with your explanation, nothing more. The discriminating case here cost one command:
+compare two links whose only difference is the parameter you intend to change.
+
+Worse, it was self-concealing. The wrong destination is a real Amazon product page on the right
+host, so `isDestinationPlausible()` passes it, the link turns green, and it looks resolved. It was
+found only because maxnl knew what those links should point at and opened the untouched originals.
+
+Reverted entirely in 26.11.20. A colliding answer is now rejected and the link left alone - honest,
+and visibly unresolved - rather than replaced by a differently-wrong one that cannot be told from a
+right one.
 
 **Fixing an asymmetry on one path does not fix it on the other** (26.11.14 -> 26.11.18). The retry
 applies its answer without the plausibility check, because an answer resolved for one exact URL cannot
