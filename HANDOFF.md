@@ -108,6 +108,56 @@ the final URL directly and never see the redirector. Confirm from a browser befo
 Chromium here, so no genuine screenshot could be taken, and a fixture mock-up presented as a
 screenshot would misrepresent the UI. Needs to be captured by hand.
 
+**Only a hostname-shaped claim is believed** (26.11.24). The check reads `data-product-exitwebsite`,
+never anchor text — but it did not require that attribute to *hold* a hostname, and a value holding
+prose (`Amazon`, `Get Deal at Amazon`) matches nothing, so the link was rejected and burned a retry.
+That is 26.11.13 one attribute along. A value that is not hostname-shaped is now treated as no claim
+and the link resolves unchecked, exactly as one carrying no attribute does.
+
+Coverage, measured over the 14 saved pages in the scratchpad: **30 of 4,314 anchors** carry the
+attribute at all, **30 of 31 resolver-bound links** do, and the 3 distinct values (`amazon.com`,
+`slickdeals.net`, `rei.com`) are all hostname-shaped. So the great majority of links on a page are
+never checked and never retried — the check governs a small, specific set.
+
+**The retry costs a second request on links that stay unresolvable.** A rejected retry is not
+cached — deliberately, since caching a negative would stop the link ever recovering — so a link
+whose answer disagrees and whose retry also disagrees asks twice on every page load, for good.
+An accepted retry caches and settles after one load. Bounded and only on links that were already
+failing, but worth knowing before adding any further retry.
+
+---
+
+## 3a. Reviewed and found clean
+
+Recorded so a later session does not re-derive them. Read at 26.11.23.
+
+- **`noAds` interception** (`setAttribute`, `fetch`, `XHR`, the `innerHTML`/`src`/`href` property
+  setters, the DOM-insertion method wrappers). The `if` at the top of the patched `setAttribute`
+  binds as `(isNoAds && src && <script|iframe|img>) || (href && <link>)`, so the `<link>` branch is
+  not gated by `isNoAds` — harmless, because the first thing inside is `isNoAds ? isAds(value) :
+  false`, and with `isNoAds` off the block falls through to the native call unchanged. Ugly, not
+  wrong; if it is ever rewritten, keep that inner guard.
+- **`isAds` / the block and allow lists.** The resolver host `slickdeals.net.vano.org` matches
+  nothing in `blockUrl`, so the script's own `resolveUrl()` fetch is not blocked by its own ad
+  filter. Check this again if the resolver host ever changes — `/click\./` and `/analytic/` are
+  broad.
+- **The darkMode observer** watches `document.body`'s `class` and writes `document.body`'s `class`,
+  which looks like a self-triggering loop and is not: `classList.toggle(name, force)` returns
+  without running the update steps when the state already matches, so no attribute is written and
+  no record is queued. `add()`/`remove()` do **not** have that property — they set the attribute
+  unconditionally. Never swap one for the other inside an observer callback.
+- **`linkUpdate()` reads `_hrefOrig` on every path.** All five call sites are reachable only after
+  `processLinks()` has set it, so none can write `href = undefined`.
+- **`initMenu.counter`** is assigned after the function body but before any call, so the deferred
+  retry counts down properly. **`initMenu.elHeader`** is assigned immediately after
+  `initMenu.elMenu`, and the observer's reattach path tests `elMenu` first, so it cannot fire with
+  `elHeader` unset.
+- **`settingsSave()` eviction** and the two `JSON.parse` loads. The load-time trim handles a cache
+  already over the cap; the write-time catch bails when `links` is empty rather than recursing.
+
+Cosmetic only, not worth a release on its own: four `debug()` calls inside `if (blocked)` branches
+print `(blocked ? "blocked" : "allowed")`, which is always `"blocked"`.
+
 ---
 
 ## 4. Environment
