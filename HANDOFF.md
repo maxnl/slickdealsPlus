@@ -108,6 +108,17 @@ the final URL directly and never see the redirector. Confirm from a browser befo
 Chromium here, so no genuine screenshot could be taken, and a fixture mock-up presented as a
 screenshot would misrepresent the UI. Needs to be captured by hand.
 
+**Only a hostname-shaped claim is believed** (26.11.24). The check reads `data-product-exitwebsite`,
+never anchor text — but it did not require that attribute to *hold* a hostname, and a value holding
+prose (`Amazon`, `Get Deal at Amazon`) matches nothing, so the link was rejected and burned a retry.
+That is 26.11.13 one attribute along. A value that is not hostname-shaped is now treated as no claim
+and the link resolves unchecked, exactly as one carrying no attribute does.
+
+Coverage, measured over the 14 saved pages in the scratchpad: **30 of 4,314 anchors** carry the
+attribute at all, **30 of 31 resolver-bound links** do, and the 3 distinct values (`amazon.com`,
+`slickdeals.net`, `rei.com`) are all hostname-shaped. So the great majority of links on a page are
+never checked and never retried — the check governs a small, specific set.
+
 **The retry costs a second request on links that stay unresolvable.** A rejected retry is not
 cached — deliberately, since caching a negative would stop the link ever recovering — so a link
 whose answer disagrees and whose retry also disagrees asks twice on every page load, for good.

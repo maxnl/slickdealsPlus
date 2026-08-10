@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.23** |
+| Current | **v26.11.24** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -82,6 +82,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.21 | [#48](https://github.com/maxnl/slickdealsPlus/pull/48) | An affiliate network is no longer read as a contradicting destination |
 | 26.11.22 | [#49](https://github.com/maxnl/slickdealsPlus/pull/49) | A network answer is followed on to the merchant, guarded by the host the anchor states |
 | 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
+| 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
 
 ---
 
@@ -318,6 +319,29 @@ equally what an intermediate hop looks like. Nothing about the answer tells you 
 again under an id the service holds nothing for does, because that resolves on demand, follows the
 chain, and either reaches the stated host or does not. Match, and it was an intermediate hop and is
 now complete. Still disagree, and it was a collision, so the link is left alone.
+
+**A check is only as good as the field it reads, and it should say so** (26.11.24). maxnl asked what
+happens to a link whose text is words rather than a domain. The check does not read anchor text - it
+reads `data-product-exitwebsite`, and swapping to that attribute is what repaired 26.11.13. But the
+question was the right one aimed one field over: nothing made the check *require* that attribute to
+hold a hostname.
+
+An absent value was handled - no claim, resolve unchecked. A value holding prose was not: `Amazon`
+normalises to `amazon`, which no real host can equal or be a subdomain of, so the link was rejected
+and, from 26.11.23, burned a retry on the way. That is 26.11.13 exactly, one attribute along, and
+the only thing standing between the script and it was that this attribute happens to hold hostnames.
+
+Measured across 14 saved pages: 30 of 4,314 anchors carry the attribute, 30 of 31 resolver-bound
+links do, and all 3 distinct values are hostname-shaped. Never observed - but 3 values is not a
+guarantee, and the fix costs one predicate.
+
+So the shape is now required before the value is believed, and a value that fails it is treated as
+no claim at all. The direction matters: unchecked is how every link behaved before the check
+existed, and it fails visibly - a wrong destination gets reported. A claim nothing can satisfy fails
+invisibly, rejecting links that were fine and reading as "resolution is just broken again".
+
+The generalisation: when a check depends on a field having a particular shape, test the shape rather
+than assuming it, and make an unreadable value mean *no information* rather than *contradiction*.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
