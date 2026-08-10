@@ -68,6 +68,13 @@ rewrote seven colour links to the deal's default product. See *issues we hit* in
 Any future attempt must not alter the submitted URL, and must be checked against a deal body's
 variant links, not a single post link.
 
+**The affiliate-network list needs adding to over time** (26.11.21). `isDestinationPlausible()` lets
+a known network through, because a network is transit and never another link's answer. The answer is
+opaque - `flexoffers.com/links/?cid=…&p=…`, nothing in it names the merchant - so there is no way to
+recognise an unfamiliar one by shape. Symptom: a link stays unresolved, and with Debug on logs
+"destination discarded" naming a host that is plainly a network rather than a shop. Add it to
+`redirectors` in that function.
+
 **Unbounded concurrency.** `processLinks()` fires `resolveUrl()` for every link with no `await` and
 no queue, so a thread with 47 resolvable links opens 47 simultaneous requests. Measured over separate
 `curl` connections the service serves roughly four at a time: 12 requests at concurrency 1 all

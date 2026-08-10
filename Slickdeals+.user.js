@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.20
+// @version      26.11.21
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.20";
+const VERSION = "26.11.21";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.20";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! a deal body's colour links all resolved to the deal's default product instead of their own
-# the link index that selects the variant was being replaced before the lookup; it is left alone now`;
+const CHANGES = `! links going through an affiliate network stayed unresolved - the network was read as the wrong destination
+# a network is transit, never another link's answer, so it is no longer treated as a contradiction`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2434,6 +2434,19 @@ const getCacheKey = (() =>
  */
 const isDestinationPlausible = (() =>
 {
+	/* Affiliate networks the service legitimately answers with. Registrable
+	 * domains only; subdomains are matched too, so `track.flexlinkspro.com` and
+	 * `rei.pxf.io` are both covered by their bare entry. */
+	const redirectors = [
+		"flexoffers.com", "flexlinkspro.com",
+		"pxf.io", "sjv.io", "prf.hn", //Impact
+		"anrdoezrs.net", "dpbolvw.net", "jdoqocy.com", "kqzyfj.com", "tkqlhce.com", //CJ
+		"linksynergy.com", //Rakuten
+		"shareasale.com", "avantlink.com", "awin1.com", "zenaps.com",
+		"redirectingat.com", "skimresources.com", //Skimlinks
+		"go.redirectingat.com", "howl.link", "narrativ.com",
+		"connexity.net", "bfxxr.com", "viglink.com"
+	];
 	const hostOf = value => ("" + value).toLowerCase()
 		.replace(/^[a-z\d+.-]+:\/\//, "")
 		.replace(/[/?#].*$/, "")
@@ -2462,7 +2475,25 @@ const isDestinationPlausible = (() =>
 		if (!aStated)
 			return true;
 
-		return aHost === aStated || aHost.endsWith("." + aStated) || aStated.endsWith("." + aHost);
+		if (aHost === aStated || aHost.endsWith("." + aStated) || aStated.endsWith("." + aHost))
+			return true;
+
+		/* An affiliate network is transit, not a destination, and never another
+		 * link's answer - so it is not a contradiction and must not be rejected.
+		 *
+		 * Measured live: both timex.com links on thread 19856376 resolve to
+		 * `flexoffers.com/links/?cid=<unique per link>&p=170370`, a correct
+		 * per-link answer that this check threw away for stating the wrong host,
+		 * leaving them unwrapped. The service returns the network's first hop when
+		 * answering from its cache and the final merchant URL when it resolves on
+		 * demand; both are right, and only the first looks wrong here.
+		 *
+		 * A list, because there is no way to tell a redirector from a merchant by
+		 * shape - the answer is opaque (`?cid=…&p=…`, nothing naming timex). It
+		 * needs adding to when an unfamiliar network turns up: the symptom is a
+		 * link that stays unresolved with a "destination discarded" line naming a
+		 * host that is plainly a network rather than a shop. */
+		return redirectors.some(host_ => aHost === host_ || aHost.endsWith("." + host_));
 	};
 })();
 
