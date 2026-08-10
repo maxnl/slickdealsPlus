@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.23
+// @version      26.11.24
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.23";
+const VERSION = "26.11.24";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.23";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `+ a link answered somewhere other than where it says it goes is asked again, and followed on if that reaches it
-# no list of affiliate networks - the link states its own destination, and the answer either gets there or it does not`;
+const CHANGES = `# a link that states its destination as words rather than a host is left to resolve unchecked
+# only a value shaped like a hostname is believed as a destination claim - prose is not a claim`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2486,6 +2486,24 @@ const hostOf = value => ("" + value).toLowerCase()
 	.replace(/^www\./, "")
 	.replace(/\.$/, "");
 
+/**
+ * Whether a value looks like a hostname rather than a piece of prose.
+ *
+ * Deliberately shape only, no list of anything: a dot-separated run of label
+ * characters ending in an alphabetic label. `amazon.com` and `shop.rei.com`
+ * pass; `Amazon`, `Get Deal at Amazon` and `Dark Gray` do not, having no dot
+ * and - for the last two - whitespace besides.
+ *
+ * It cannot separate a hostname from a name that happens to be dotted and
+ * unspaced (`J.Crew` would pass and then match nothing), and it is not meant
+ * to. It exists to stop prose being read as a destination claim, which is the
+ * failure that actually happened; the residual is narrower than what it fixes
+ * and fails the same safe way - the link is left alone, still working.
+ * @param {string} value - an already-normalised host, as returned by hostOf().
+ * @returns {boolean} true if the value can be believed as a hostname.
+ */
+const isHostShaped = value => /^[a-z\d-]+(?:\.[a-z\d-]+)*\.[a-z]{2,}$/.test(value);
+
 const isDestinationPlausible = (() =>
 {
 	return (elLink, url) =>
@@ -2507,7 +2525,24 @@ const isDestinationPlausible = (() =>
 		}
 		const aStated = hostOf(stated);
 		const aHost = hostOf(host);
-		if (!aStated)
+		/* A claim that cannot be read is not a claim.
+		 *
+		 * The whole check rests on the attribute holding a hostname. It has held
+		 * one everywhere it has been sampled, but nothing guarantees it: the
+		 * attribute it replaced, `trd`, holds the anchor's own text - `Dark Gray`,
+		 * `Get Deal at Amazon` - and reading that as a destination is exactly what
+		 * broke 26.11.13, four links in five. If this attribute ever carries a
+		 * merchant name rather than a host, the comparison below can never match,
+		 * so every such link would be rejected and, since 26.11.23, would burn a
+		 * retry on the way. That is the same failure with a different attribute.
+		 *
+		 * So require it to look like a host before believing it: no whitespace, at
+		 * least one dot, and an alphabetic last label. A value that fails is
+		 * treated as no claim at all - the link resolves unchecked, exactly as one
+		 * carrying no attribute does. Refusing to guess is the safe direction:
+		 * unchecked is how every link behaved before the check existed, while a
+		 * claim nothing can satisfy silently rejects a link that was fine. */
+		if (!isHostShaped(aStated))
 			return true;
 
 		return aHost === aStated || aHost.endsWith("." + aStated) || aStated.endsWith("." + aHost);
