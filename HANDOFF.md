@@ -68,18 +68,17 @@ rewrote seven colour links to the deal's default product. See *issues we hit* in
 Any future attempt must not alter the submitted URL, and must be checked against a deal body's
 variant links, not a single post link.
 
-**A network answer is followed on to the merchant** (26.11.22). When the service answers with an
-affiliate network, the link is asked once more under a novel id, which it resolves on demand and
-follows to the end; that answer is used only if it lands on the host the anchor states. This is the
-`lno` perturbation that 26.11.20 removed, used deliberately in one guarded place - see *issues we
-hit* for why that is not a reversal, and for the one residual risk it carries.
+**An answer that disagrees is asked again, not discarded** (26.11.23). When the service answers with a
+host the anchor does not state, the link is asked once more under an id the service holds nothing
+for, which resolves on demand and follows the chain; that answer is used if it reaches the stated
+host, and the link is left alone if it does not. This settles collision and intermediate hop with one
+question, needs no list of affiliate networks, and works for a network nobody has seen before. It is
+the `lno` perturbation that 26.11.20 removed, used only where the answer already disagrees - so a
+deal body's variant links, which answer with their own merchant, never reach it.
 
-**The affiliate-network list needs adding to over time** (26.11.21). `isDestinationPlausible()` lets
-a known network through, because a network is transit and never another link's answer. The answer is
-opaque - `flexoffers.com/links/?cid=…&p=…`, nothing in it names the merchant - so there is no way to
-recognise an unfamiliar one by shape. Symptom: a link stays unresolved, and with Debug on logs
-"destination discarded" naming a host that is plainly a network rather than a shop. Add it to
-`redirectors` in that function.
+The residual: a variant link whose answer disagrees *and* whose retry returns the deal's default on
+the stated host would be accepted wrongly and invisibly. None has been seen, and an Amazon variant
+link cannot produce one.
 
 **Unbounded concurrency.** `processLinks()` fires `resolveUrl()` for every link with no `await` and
 no queue, so a thread with 47 resolvable links opens 47 simultaneous requests. Measured over separate
