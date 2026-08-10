@@ -127,6 +127,15 @@ failing, but worth knowing before adding any further retry.
 
 ---
 
+**Link resolving was broken in v26.11.23 and v26.11.24.** 26.11.23 deleted `decodeResolved()` and
+`resolveFinalHop()` alongside the network list they sat next to, and left the call to
+`resolveFinalHop()` in place. The ReferenceError is raised inside the `.then()`, caught by the decode
+handler and logged through `debug()`, so the only symptom is links that never resolve. Restored in
+**v26.11.25**, and the release now runs ESLint `no-undef` (`.github/undef-check.mjs`), confirmed to
+fail on 26.11.24 and pass on the fix. If you are on either broken version, update.
+
+---
+
 ## 3a. Reviewed and found clean
 
 Recorded so a later session does not re-derive them. Read at 26.11.23.
@@ -204,7 +213,13 @@ and use it sparingly even then.
   `const VERSION` must agree or the release workflow fails.
 - The stylesheet is one template literal — no backtick or `${` anywhere in it, comments included.
   `sed -n '/^})(`/,$p' 'Slickdeals+.user.js' | grep -c '`\|\${'` must print `2`.
-- `node --check` proves nothing about behaviour. Every regression in this repo's history passed it.
+- `node --check` proves nothing about behaviour. Every regression in this repo's history passed it,
+  including 26.11.23's call to a function that did not exist - it parses, it does not resolve names.
+  The release runs `node .github/undef-check.mjs` for that; run it by hand too (`npm install
+  --no-save eslint globals` first).
+- **A harness must call the shipped function, not a copy of it.** The 26.11.23 decision model
+  re-implemented the retry, so it happily printed `FOLLOWED ON` for a build whose retry function had
+  been deleted. Extract from the file, the way the `isDestinationPlausible` unit test does.
 - The release workflow runs only on push to `master`, so a PR shows no checks. That is expected, not
   a failure. Its gates — version consistency and `node --check` — are worth running by hand.
 - **Two lessons, both learned the hard way here.** A signal validated on one sample is not validated:
