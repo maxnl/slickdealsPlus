@@ -35,6 +35,7 @@ const VERSION = "26.11.26";
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
 const CHANGES = `* a link in a post is asked for under an id that identifies it, so it resolves in one request instead of two
+! the deal's own button and image asked again on every single page load - their cache entry could never be found
 + a link that resolves to nothing is remembered for a week instead of being asked again on every page load
 # a deal's own links already have unique ids and are sent untouched - the colour variants keep their own products`;
 const linksData = {}; //Object containing data for links.
@@ -311,6 +312,14 @@ const SETTINGS = (() =>
 		 * alternative of a wrong destination that never expires. An organically
 		 * grown cache was around 566 entries, so this is a bounded one-off. */
 		if (compareVersion(previousVersion, "26.11.16") < 0)
+			links.clear();
+
+		/* getCacheKey() started stripping `pv`, `au` and `trd` in 26.11.26, so
+		 * every key changed shape. Existing entries are keyed the old way and can
+		 * never be read again - not wrong, just unreachable, and they would sit
+		 * there occupying the cap until evicted one by one. Drop them once and let
+		 * the cache refill under the new keys. */
+		if (compareVersion(previousVersion, "26.11.26") < 0)
 			links.clear();
 	}
 	/* clean up old/invalid settings */
@@ -2440,8 +2449,28 @@ const getCacheKey = (() =>
 	 * same page. hash, auuid and sdtrk are session or page scoped. u3 is opaque.
 	 * A denylist, not an allowlist: over-stripping only merges links that share
 	 * a destination, while missing a distinguishing parameter would bring back
-	 * the collision this key exists to prevent. */
-	const volatile = ["u3", "adobeRef", "peid", "hash", "auuid", "sdtrk"];
+	 * the collision this key exists to prevent.
+	 *
+	 * `pv` and `au` were missing, and they are per-pageview. Measured by keying
+	 * two fetches of thread 19854408 taken a day apart: 12 of 14 links kept their
+	 * key, and the 2 that did not were the deal's own `Get Deal at Amazon` button
+	 * and its image - the most-used links on the page. Their key changed on every
+	 * pageview, so they missed the cache every time and re-asked the service on
+	 * every single load, for the life of the install. With `pv` and `au` stripped
+	 * all 14 are stable.
+	 *
+	 * `trd` is deliberately NOT stripped, though it is only the anchor's text and
+	 * cannot affect a destination. Stripping it saves one request - the sticky-bar
+	 * button and the deal image share a resolver id and would merge into one entry
+	 * - but it is the wrong trade. Links in different posts of one thread are
+	 * `sdtid=<thread>&lno=<n>&sdfid=9`, where `lno` restarts in every post and
+	 * `sdfid` is the forum, not the post: strip `trd` as well and two posts' first
+	 * links key identically, which would hand them one destination between them.
+	 * The anchor text is the only thing in the URL that reliably tells them apart.
+	 *
+	 * Checked for false merges - one key covering links with different resolver
+	 * ids - across both fixture threads: none. */
+	const volatile = ["u3", "adobeRef", "peid", "hash", "auuid", "sdtrk", "pv", "au"];
 	const count = volatile.length;
 	return urlObject =>
 	{
