@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.24
+// @version      26.11.25
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.24";
+const VERSION = "26.11.25";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.24";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `# a link that states its destination as words rather than a host is left to resolve unchecked
-# only a value shaped like a hostname is believed as a destination claim - prose is not a claim`;
+const CHANGES = `! link resolving was broken in 26.11.23 and 26.11.24 - a function was deleted while still being called
+# the release now fails on a call to something that is not defined, which is how that shipped`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2503,6 +2503,65 @@ const hostOf = value => ("" + value).toLowerCase()
  * @returns {boolean} true if the value can be believed as a hostname.
  */
 const isHostShaped = value => /^[a-z\d-]+(?:\.[a-z\d-]+)*\.[a-z]{2,}$/.test(value);
+
+/**
+ * Unmasks a resolver response. The body is XOR'd against the id it was asked
+ * for, so the id used here must be the one that was sent.
+ * @function
+ * @param {string} id - The id the response was requested under.
+ * @param {ArrayBuffer} response - The raw response body.
+ * @returns {string} the destination, or "" if there was nothing usable
+ */
+const decodeResolved = (id, response) =>
+{
+	if (!response || response instanceof Response || response.byteLength === 0)
+		return "";
+
+	const bytes = new Uint8Array(response);
+	const k = new TextEncoder().encode(id);
+	const r = new Uint8Array(bytes.length).map((_, i) => bytes[i] ^ bytes[i - 1] ^ k[i % k.length]);
+	const text = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
+	return /^https?:\/\//.test(text) ? text : "";
+};
+
+/**
+ * Asks again under an id the service cannot already hold an answer for.
+ *
+ * The service answers a *known* id from whatever it holds, and that can be an
+ * intermediate hop rather than the shop. Asked an id it holds nothing for, it
+ * resolves on demand, follows the chain and returns the end of it. The only way
+ * to make the id novel is to alter the request, since the service derives the
+ * id from the URL and refuses a pair that disagrees, so `lno` is replaced with
+ * this link's cache key.
+ *
+ * **That is destructive in general** - `lno` selects the variant on a deal
+ * body's links, and perturbing it once rewrote seven colour links to the deal's
+ * default product (26.11.15, reverted in 26.11.20). It is safe *here* only
+ * because of where it is called from and what the caller does with the answer:
+ * only when the natural answer disagrees with the host the anchor states, and
+ * only if what comes back agrees with it. A link answered with its own merchant
+ * - which is every one of those colour links - never reaches this.
+ *
+ * Nothing here knows about any particular network, and nothing needs to.
+ * @function
+ * @param {URL} urlObject - The original link.
+ * @param {string} key - This link's cache key, used as the replacement index.
+ * @returns {Promise<string>} the destination, or "" if it could not be had
+ */
+const resolveFinalHop = (urlObject, key) =>
+{
+	const urlFresh = new URL(urlObject);
+	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
+	const idFresh = getUrlId(urlFresh);
+	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
+	 * link, and the service does not recognise those. */
+	if (!idFresh || /crc$/.test(idFresh))
+		return Promise.resolve("");
+
+	return resolveUrl(idFresh, urlFresh.href)
+		.then(response => decodeResolved(idFresh, response))
+		.catch(() => "");
+};
 
 const isDestinationPlausible = (() =>
 {

@@ -34,6 +34,13 @@ jobs:
       - name: Syntax check
         run: node --check 'Slickdeals+.user.js'
 
+      # node --check parses but does not resolve names. v26.11.23 shipped a call
+      # to a function deleted in the same commit and passed every gate here.
+      - name: Undefined-identifier check
+        run: |
+          npm install --no-save --no-audit --no-fund --silent eslint globals
+          node .github/undef-check.mjs 'Slickdeals+.user.js'
+
       - name: Create release if this version has none
         env:
           GH_TOKEN: ${{ github.token }}
