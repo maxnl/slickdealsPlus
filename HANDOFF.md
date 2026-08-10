@@ -58,19 +58,15 @@ measurement of *where a link goes* must come from a browser.
 
 ## 3. Outstanding
 
-**Asking uniquely has not been checked in a browser - and it is now live.** The browser test of
-thread `19856376` ran on v26.11.14, which predates the change, so those two `timex.com` post links
-were asked under the *shared* id and answered correctly with the true product URL. From 26.11.15 they
-take the unique path instead, and the only measurement of what that returns for them came from probes
-carrying a curl-derived `u3`, which answered an opaque `flexoffers.com` redirector. Per §2 that
-cannot tell a real downgrade from an artifact of the fetch.
+**The rei.com post link does not unwrap, and that is now the accepted behaviour.** Its id collides
+with other first-links-in-post, the service answers with the thread's own product, and the check
+rejects it. The link keeps its Slickdeals href and still reaches rei.com; it only loses the unwrap.
 
-**Check this first, on a released build:** clear the link cache
-(`localStorage.removeItem("slickdeals+links"); location.reload();`), load `19856376`, and confirm both
-green post links still land on `timex.com`. If they land on `flexoffers.com` instead, the change is a
-downgrade for links of that shape and `resolverRequest()` should be reverted - 26.11.14's behaviour is
-unaffected and still released. If they land on `timex.com`, this item is closed and the curl result
-was an artifact, as §2 predicts.
+The repair tried in 26.11.14-15 - re-asking under an id derived from the cache key, by replacing
+`lno` - is **not** available: `lno` selects the variant on a deal body's links, so perturbing it
+rewrote seven colour links to the deal's default product. See *issues we hit* in `FORK-NOTES.md`.
+Any future attempt must not alter the submitted URL, and must be checked against a deal body's
+variant links, not a single post link.
 
 **Unbounded concurrency.** `processLinks()` fires `resolveUrl()` for every link with no `await` and
 no queue, so a thread with 47 resolvable links opens 47 simultaneous requests. Measured over separate
