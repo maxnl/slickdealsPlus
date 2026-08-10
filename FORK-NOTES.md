@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.24** |
+| Current | **v26.11.25** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -83,6 +83,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.22 | [#49](https://github.com/maxnl/slickdealsPlus/pull/49) | A network answer is followed on to the merchant, guarded by the host the anchor states |
 | 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
 | 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
+| 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
 
 ---
 
@@ -342,6 +343,32 @@ invisibly, rejecting links that were fine and reading as "resolution is just bro
 
 The generalisation: when a check depends on a field having a particular shape, test the shape rather
 than assuming it, and make an unreadable value mean *no information* rather than *contradiction*.
+
+**A harness that re-implements the code under test validates your intent, not the artifact**
+(26.11.23 -> 26.11.25). 26.11.23 removed the hardcoded network list, and removed `decodeResolved()`
+and `resolveFinalHop()` along with it - they sat next to the deleted code - while leaving the call
+to `resolveFinalHop()` in place. Both 26.11.23 and 26.11.24 shipped that way. Link resolving was
+broken in both, in the way maxnl had already reported once for 26.11.20.
+
+Every gate passed. `node --check` parses and does not resolve names. The version numbers agreed.
+The stylesheet check passed. The unit assertions passed, because they test `isDestinationPlausible()`
+and nothing else. And the decision model - the thing that printed `Timex 1 -> FOLLOWED ON` and was
+quoted as proof the retry worked - *re-implemented the retry in the harness* rather than calling the
+shipped one, so nothing in the whole suite ever looked the missing function up.
+
+The browser hid it too, and by a mechanism this file already documents: the ReferenceError is raised
+inside the `.then()`, caught by the `catch` that wraps the decode, and logged through `debug()`,
+which is `fVoid` unless Debug is ticked. A silent catch turns a missing function into a link that
+just quietly does not resolve.
+
+Two things follow. A harness must call the shipped function, not a copy of it - extract it from the
+file, as the `isDestinationPlausible` unit test does, and if it cannot be extracted that is a reason
+to restructure the code, not to model it. And a gate for the class, not the instance: the release now
+runs ESLint `no-undef` over the script, which flags exactly this in one line, and which was added
+only after confirming it fails on the shipped 26.11.24 and passes on the fix.
+
+The wider point, and the third time this file has had to make it: *proving the mechanism* and
+*proving this build has the mechanism* are different claims. The first was true throughout.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
