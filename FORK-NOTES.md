@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.21** |
+| Current | **v26.11.22** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -79,7 +79,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.18 | [#45](https://github.com/maxnl/slickdealsPlus/pull/45) | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
 | 26.11.19 | [#46](https://github.com/maxnl/slickdealsPlus/pull/46) | Free highlighting reaches the homepage list view and the `/deals/` list view |
 | 26.11.20 | [#47](https://github.com/maxnl/slickdealsPlus/pull/47) | **`lno` perturbation reverted - deal-body variant links resolved to the deal's default product** |
-| 26.11.21 | — | An affiliate network is no longer read as a contradicting destination |
+| 26.11.21 | [#48](https://github.com/maxnl/slickdealsPlus/pull/48) | An affiliate network is no longer read as a contradicting destination |
+| 26.11.22 | — | A network answer is followed on to the merchant, guarded by the host the anchor states |
 
 ---
 
@@ -288,6 +289,23 @@ mistake.
 The failure is the same shape as #1, committed in the same breath as a warning about it. The rule
 that would have caught it: find the case that tells your explanation apart from its rival, and test
 *that* one.
+
+**A dangerous operation can be safe in one place and not another** (26.11.15 -> 26.11.22).
+Perturbing `lno` to force an on-demand resolve is destructive in general - it rewrote seven colour
+links to the deal's default product, and 26.11.20 removed it. 26.11.22 uses it again, in one place,
+and that is not a reversal: what makes it safe is not the operation but where it runs and what is
+done with the answer.
+
+It fires only when the natural answer is an affiliate network - which a deal body's variant links
+never are, since they answer with `amazon.com/dp/…` directly - and the result is taken only if it
+lands on the host the anchor states. A link already answered with its merchant never reaches it.
+
+The residual is honest and worth writing down: a variant link on a merchant that *does* route through
+a network, whose perturbed answer is the deal's default on the same host, would be accepted wrongly
+and invisibly. No such link has been seen; Amazon links cannot produce one.
+
+The generalisation: "this operation is unsafe" and "this operation is unsafe here" are different
+claims, and collapsing them costs you the cases where it was the only thing that worked.
 
 **A check needs its false positives measured, not assumed** (26.11.13 -> 26.11.21). `isDestinationPlausible()`
 rejects an answer whose host contradicts the one the anchor states. Twice this session a false
