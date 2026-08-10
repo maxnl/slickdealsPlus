@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.21
+// @version      26.11.22
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.21";
+const VERSION = "26.11.22";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.21";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! links going through an affiliate network stayed unresolved - the network was read as the wrong destination
-# a network is transit, never another link's answer, so it is no longer treated as a contradiction`;
+const CHANGES = `+ a link answered with an affiliate network is followed on to the shop itself
+# only when the answer is a network, and only if it lands on the host the link says it goes to`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2153,6 +2153,40 @@ const processLinks = (node, force) =>
 						return response;
 					}
 
+					/* The answer is right, but it may be an affiliate network's
+					 * first hop rather than the shop. Ask once more under a novel
+					 * id, which the service resolves on demand and follows to the
+					 * end - and take that answer only if it lands on the host this
+					 * anchor states, which is what makes altering the request safe
+					 * here. A link already answered with its merchant never gets
+					 * this far, so a deal body's variant links, whose `lno` the
+					 * perturbation would destroy, are not touched. */
+					const stated = elLink.dataset ? elLink.dataset.productExitwebsite : "";
+					if (stated && isRedirector(response))
+					{
+						return resolveFinalHop(urlObject, key).then(final =>
+						{
+							const better = final && hostOf(final) === hostOf(stated);
+							if (better)
+							{
+								debug(debugPrefix + "%cfollowed the network hop to the merchant",
+									"color:green",
+									"color:#656",
+									id,
+									response,
+									final
+								);
+							}
+							const use = better ? final : response;
+							SETTINGS(key, use);
+							for(let i = 0; i < aLinks.length; i++)
+								linkUpdate(aLinks[i], use);
+
+							aLinks.resolved = true;
+							return use;
+						});
+					}
+
 					SETTINGS(key, response);
 					for(let i = 0; i < aLinks.length; i++)
 						linkUpdate(aLinks[i], response);
@@ -2432,27 +2466,109 @@ const getCacheKey = (() =>
  * @param {string} url - The destination to check.
  * @returns {boolean} false only when the anchor states a host and this is not it
  */
+/* Affiliate networks the service legitimately answers with. Registrable domains
+ * only; subdomains are matched too, so `track.flexlinkspro.com` and `rei.pxf.io`
+ * are both covered by their bare entry. Add to this when an unfamiliar network
+ * turns up - the symptom is a link that stays unresolved, logging "destination
+ * discarded" against a host that is plainly a network rather than a shop. */
+const redirectors = [
+	"flexoffers.com", "flexlinkspro.com",
+	"pxf.io", "sjv.io", "prf.hn", //Impact
+	"anrdoezrs.net", "dpbolvw.net", "jdoqocy.com", "kqzyfj.com", "tkqlhce.com", //CJ
+	"linksynergy.com", //Rakuten
+	"shareasale.com", "avantlink.com", "awin1.com", "zenaps.com",
+	"redirectingat.com", "skimresources.com", //Skimlinks
+	"go.redirectingat.com", "howl.link", "narrativ.com",
+	"connexity.net", "bfxxr.com", "viglink.com"
+];
+
+/**
+ * Registrable-ish host of a URL or bare hostname, lowercased, `www` and any
+ * port removed, for comparing one against another.
+ * @function
+ * @param {string} value - A URL or a bare hostname.
+ * @returns {string} the host, normalised
+ */
+const hostOf = value => ("" + value).toLowerCase()
+	.replace(/^[a-z\d+.-]+:\/\//, "")
+	.replace(/[/?#].*$/, "")
+	.replace(/:\d+$/, "")
+	.replace(/^www\./, "")
+	.replace(/\.$/, "");
+
+/**
+ * Whether a destination is an affiliate network rather than a shop - transit
+ * on the way to the merchant, and as far as the service's cached answer goes.
+ * @function
+ * @param {string} url - The destination to test.
+ * @returns {boolean} true if this is a known network
+ */
+const isRedirector = url =>
+{
+	const host = hostOf(url);
+	return redirectors.some(domain => host === domain || host.endsWith("." + domain));
+};
+
+/**
+ * Unmasks a resolver response. The body is XOR'd against the id it was asked
+ * for, so the id used here must be the one that was sent.
+ * @function
+ * @param {string} id - The id the response was requested under.
+ * @param {ArrayBuffer} response - The raw response body.
+ * @returns {string} the destination, or "" if there was nothing usable
+ */
+const decodeResolved = (id, response) =>
+{
+	if (!response || response instanceof Response || response.byteLength === 0)
+		return "";
+
+	const bytes = new Uint8Array(response);
+	const k = new TextEncoder().encode(id);
+	const r = new Uint8Array(bytes.length).map((_, i) => bytes[i] ^ bytes[i - 1] ^ k[i % k.length]);
+	const text = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
+	return /^https?:\/\//.test(text) ? text : "";
+};
+
+/**
+ * Asks again under an id the service cannot already hold an answer for, to get
+ * the merchant URL instead of an affiliate network's first hop.
+ *
+ * The service answers a *known* id from its cache, and for some links what it
+ * cached is the network's first hop - `flexoffers.com/links/?cid=…`. Asked an
+ * id it holds nothing for, it resolves on demand, follows the chain and returns
+ * the merchant URL. The only way to make the id novel is to alter the request,
+ * since the service derives the id from the URL and refuses a pair that
+ * disagrees, so `lno` is replaced with this link's cache key.
+ *
+ * **That is destructive in general** - `lno` selects the variant on a deal
+ * body's links, and perturbing it once rewrote seven colour links to the deal's
+ * default product (26.11.15, reverted in 26.11.20). It is safe *here* only
+ * because of where this is called from and what the caller does with the
+ * answer: only when the natural answer is a network, and only if what comes
+ * back matches the host the anchor states. A link whose answer is already the
+ * merchant never reaches this.
+ * @function
+ * @param {URL} urlObject - The original link.
+ * @param {string} key - This link's cache key, used as the replacement index.
+ * @returns {Promise<string>} the destination, or "" if it could not be had
+ */
+const resolveFinalHop = (urlObject, key) =>
+{
+	const urlFresh = new URL(urlObject);
+	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
+	const idFresh = getUrlId(urlFresh);
+	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
+	 * link, and the service does not recognise those. */
+	if (!idFresh || /crc$/.test(idFresh))
+		return Promise.resolve("");
+
+	return resolveUrl(idFresh, urlFresh.href)
+		.then(response => decodeResolved(idFresh, response))
+		.catch(() => "");
+};
+
 const isDestinationPlausible = (() =>
 {
-	/* Affiliate networks the service legitimately answers with. Registrable
-	 * domains only; subdomains are matched too, so `track.flexlinkspro.com` and
-	 * `rei.pxf.io` are both covered by their bare entry. */
-	const redirectors = [
-		"flexoffers.com", "flexlinkspro.com",
-		"pxf.io", "sjv.io", "prf.hn", //Impact
-		"anrdoezrs.net", "dpbolvw.net", "jdoqocy.com", "kqzyfj.com", "tkqlhce.com", //CJ
-		"linksynergy.com", //Rakuten
-		"shareasale.com", "avantlink.com", "awin1.com", "zenaps.com",
-		"redirectingat.com", "skimresources.com", //Skimlinks
-		"go.redirectingat.com", "howl.link", "narrativ.com",
-		"connexity.net", "bfxxr.com", "viglink.com"
-	];
-	const hostOf = value => ("" + value).toLowerCase()
-		.replace(/^[a-z\d+.-]+:\/\//, "")
-		.replace(/[/?#].*$/, "")
-		.replace(/:\d+$/, "")
-		.replace(/^www\./, "")
-		.replace(/\.$/, "");
 	return (elLink, url) =>
 	{
 		/* The attribute is written `data-product-exitWebsite` in the markup;
@@ -2493,7 +2609,7 @@ const isDestinationPlausible = (() =>
 		 * needs adding to when an unfamiliar network turns up: the symptom is a
 		 * link that stays unresolved with a "destination discarded" line naming a
 		 * host that is plainly a network rather than a shop. */
-		return redirectors.some(host_ => aHost === host_ || aHost.endsWith("." + host_));
+		return isRedirector(aHost);
 	};
 })();
 
