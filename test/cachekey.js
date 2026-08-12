@@ -51,5 +51,41 @@ check("an anchor outside any post still keys stably",
 check("no element passed is not a crash and stays stable",
 	getCacheKey(new URL(B + "&pv=1")), getCacheKey(new URL(B + "&pv=2")), true);
 
+// --- block scoping: post content renders in three places, only replies have ids ---
+// Fake just enough DOM for the scope lookup; no jsdom, no dependencies.
+const block = o => ({
+	id: o.id || "",
+	className: o.className || "",
+	querySelector: () => o.permalink ? { getAttribute: () => o.permalink } : null
+});
+const inBlock = blk => ({ closest: () => blk });
+
+const reply1 = inBlock(block({ id: "post111" }));
+const reply2 = inBlock(block({ id: "post222" }));
+const wiki   = inBlock(block({ className: "communityNotesTab__post" }));
+const feat1  = inBlock(block({ className: "featuredComment", permalink: "/f/1?p=184866396#post184866396" }));
+const feat2  = inBlock(block({ className: "featuredComment", permalink: "/f/1?p=184859763#post184859763" }));
+const loose  = inBlock(null);
+
+// The case that is hard to find in the wild: same thread, same lno, same anchor
+// text, two different featured comments. Nothing in the URL separates them.
+check("separates same-text links in two different FEATURED COMMENTS",
+	getCacheKey(new URL(B), feat1), getCacheKey(new URL(B), feat2), false);
+check("separates a wiki link from a featured-comment link with the same text",
+	getCacheKey(new URL(B), wiki), getCacheKey(new URL(B), feat1), false);
+check("separates a wiki link from a reply link with the same text",
+	getCacheKey(new URL(B), wiki), getCacheKey(new URL(B), reply1), false);
+check("separates a featured comment from a reply with the same text",
+	getCacheKey(new URL(B), feat1), getCacheKey(new URL(B), reply2), false);
+check("separates content in a block from content outside any block",
+	getCacheKey(new URL(B), wiki), getCacheKey(new URL(B), loose), false);
+// and each block still keys stably for itself across loads
+check("the same featured comment keys identically across loads",
+	getCacheKey(new URL(B + "&pv=1&u3=A"), feat1),
+	getCacheKey(new URL(B + "&pv=2&u3=B"), feat1), true);
+check("the wiki block keys identically across loads",
+	getCacheKey(new URL(B + "&pv=1&u3=A"), wiki),
+	getCacheKey(new URL(B + "&pv=2&u3=B"), wiki), true);
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

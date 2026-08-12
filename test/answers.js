@@ -10,6 +10,10 @@ const LINKS = [
   ["REI post link", B+"trd=sun%20protection&sdtid=19854408&lno=1&u3=ENC1", "rei.com"],
   ["Timex post 1",  B+"trd=Timex%20watch&sdtid=19856376&lno=1&u3=ENC2",    "timex.com"],
   ["Timex post 2",  B+"trd=summer%20sale&sdtid=19856376&lno=2&u3=ENC3",    "timex.com"],
+  // 19049776: irs.treasury.gov/freetaxprep/ states treasury.gov and really ends
+  // at www.irs.gov. A unique id cannot return another link's answer, so a host
+  // that disagrees means a genuine cross-host redirect, not a wrong answer.
+  ["cross-host redirect", B+"trd=freetaxprep&sdtid=19049776&lno=19&u3=ENC4", "treasury.gov"],
 ];
 
 // u3 on post links, none on deal-body links - that is the measured markup
@@ -33,6 +37,7 @@ const freshId = (href) => { const u = new URL(href); const k = S.getCacheKey(u);
 WORLD[freshId(LINKS[3][1])] = "https://www.rei.com/learn/expert-advice/sun-protection.html";
 WORLD[freshId(LINKS[4][1])] = "https://timex.com/products/tw2y48200";
 WORLD[freshId(LINKS[5][1])] = "https://timex.com/collections/summer-sale";
+WORLD[freshId(LINKS[6][1])] = "https://www.irs.gov/";
 
 (async () => {
   for (let load = 1; load <= 3; load++) {

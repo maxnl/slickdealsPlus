@@ -1,6 +1,6 @@
 # Handoff — link resolution
 
-State as of **v26.11.26**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
+State as of **v26.11.27**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
 architecture notes and the full history of what was tried and why it failed. This file holds only
 what a new session needs to pick the work up.
 
@@ -13,66 +13,43 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and working: **v26.11.25**. Everything below that is newer is on the branch, not released.
+Released and current: **v26.11.27**, confirmed in a browser for the Amazon variants, the rei.com
+link, the Timex links, a wiki thread and a multi-post thread.
 
-| version | state | what it did |
-| --- | --- | --- |
-| 26.11.23, .24 | **broken, superseded** | shipped a call to a function deleted in the same commit; link resolving did not work |
-| 26.11.25 | **released, good** | restored it; added the `no-undef` release gate |
-| 26.11.26 | **on the branch, PR #54, not merged** | one request per link instead of two; `pv`/`au` cache-key fix; remembered failures; post-scoped keys |
+| version | state |
+| --- | --- |
+| 26.11.23, .24 | broken, superseded - shipped a call to a function deleted in the same commit |
+| 26.11.25 | good - restored it, added the `no-undef` release gate |
+| 26.11.26 | good, superseded - one request per link, `pv`/`au` cache-key fix, remembered failures |
+| 26.11.27 | **current** - a link stating its own host is no longer read as a claim; wiki and featured-comment scoping |
 
-**v26.11.26 has not been confirmed in a browser.** It is measured against the live resolver and
-covered by four harnesses, but see §3 — the things it changes are exactly the things that have been
-broken and re-broken here, so it wants a real look before it is trusted.
+Confirmed working in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com
+post link resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21
+of thread 19854408 resolve to three different destinations.
 
----
+**Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
+is remembered as failed for a week:
 
-## 2. What v26.11.26 changes, and the evidence for each
-
-**One request per link, not two.** A post's links carry `lno` and no `pno`, so their id is
-`<sdtid>sdtid<lno>lno` and `lno` restarts in every post: the first link of every post shares one id
-and the service answers them all alike. Those are asked under a perturbed id from the start rather
-than asked naturally and then re-asked. Measured on the live service: the rei.com link asked
-naturally returns the thread's amazon product, asked freshly returns its own rei.com URL.
-
-Gated on `u3`, not on `pno`. `u3` is the destination itself, encrypted, so a link carrying one can
-be resolved from the URL alone — which is *why* a fresh id works for it and destroys a link without
-one. 3 of 3 perturbed links carry `u3`; 0 of 12 deal-body links do.
-
-**The deal's own button and image could never hit the cache.** `getCacheKey()` strips what rotates
-between loads, and `pv` and `au` were missing. Keying two fetches of thread `19854408` a day apart:
-12 of 14 links kept their key; the 2 that did not were the `Get Deal at Amazon` button and the deal
-image. They re-asked the service on **every page load, for the life of the install**, while looking
-perfectly healthy because they always resolved. Now 14 of 14 stable. Every key changes shape, so the
-link cache clears once on upgrade.
-
-**A failure is remembered for a week.** A link whose answer got nowhere was never cached, so it cost
-two requests on every load forever. Now stored as an empty destination plus a timestamp; expires
-rather than being permanent, because the service's own cache changes.
-
-**The cache key is scoped to the containing post.** `lno` restarts per post and `trd` is the anchor
-text truncated to 32 characters, so two posts linking somewhere different under the same words would
-share one entry and one destination. 33 keys become 34 over 76 links.
+```js
+localStorage.removeItem("slickdeals+links"); location.reload();
+```
 
 ---
 
 ## 3. What still needs a browser
 
-Nothing here can be settled from a container; see the measuring rule at the end of §5.
+Nothing on the list below has been settled; everything previously here has been.
 
-- **The Amazon colour variants must keep their own ASINs.** Thread `19854408`. This is the thing that
-  has broken twice. Khaki is `B0GTNMT45B`, Black is `B0GTNDJ3FZ`; all eight must differ.
-- **The rei.com post link** in that thread should reach
-  `rei.com/learn/expert-advice/sun-protection.html`, and should now do it in one request.
-- **Both Timex links**, thread `19856376`, should reach `timex.com/products/…` and
-  `timex.com/collections/summer-sale`. Timex is the one destination never confirmed from here — curl
-  yields a different `u3` and answers `flexoffers.com` for it, which says nothing about a real
-  session.
-- **A thread with a wiki section**, and **a thread with links in several different posts**. Neither
-  exists in any sample taken so far, so those two link classes are reasoned about but unverified.
-  The multi-post case is where the post-scoped key would actually be exercised.
+- **Whether `unwrapLinks` ever fires anywhere.** Across 20 saved pages and 199 `/click` links, **not
+  one carries `u2`**, so the free local-unwrap path never runs on any page sampled. The setting may
+  be dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
+  evidence alone - confirm from a browser across a few page types first.
+- **Concurrency.** See below.
 
----
+*(A wiki or featured-comment block holding two same-text links is no longer on this list. It is hard
+to find in the wild, so `test/cachekey.js` now covers it with a fixture instead: two featured
+comments, a wiki block and a reply, all holding the identical URL and anchor text, asserted to key
+differently and to key stably across loads.)*
 
 ## 4. Open, not acted on
 
@@ -83,12 +60,15 @@ on the first load after any change in this area.
 
 **Unbounded concurrency.** `processLinks()` fires every request with no queue. Measured over curl the
 service serves ~4 at a time; a browser multiplexes over one HTTP/2 connection and may not trip it at
-all. Deliberately not acted on — measure from a browser first. Failure is graceful: an unresolved
-link is never cached, so the next load retries it.
+all. Deliberately not acted on — measure from a browser first.
 
-**No link in any sample carries `u2`** (0 of 45). The free local-unwrap path never fires on deal or
-post links, so `unwrapLinks` is effectively inert there. Worth confirming in a browser before
-concluding the setting does nothing.
+Failure is graceful, and this was re-checked when the negative cache went in. A rate-limited or failed
+request never reaches the branch that records a failure: `resolveUrl()` catches network errors to
+`undefined` and passes a non-ok response through unchanged, and both are thrown out at the top of the
+handler, before any `SETTINGS(key, …)` call. Only a *successful* answer that reaches the wrong host,
+whose fallback also reaches the wrong host, is remembered. So a rate-limited link stays `notResolved`,
+keeps its own href, and is asked again on the next page load — no timer, no in-page queue, no
+week-long marker.
 
 **Two latent traps, deliberately not patched.** Neither is a live bug; both are ways a future edit
 turns into a whole-script failure, so they are written down rather than guarded, to avoid another

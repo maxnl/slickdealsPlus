@@ -15,7 +15,7 @@ that is a reason to restructure the script, not to model it.
 | `lifecycle.js` | shared rig: extracts the resolver functions and stubs the transport, masking responses exactly as the service does so `decodeResolved()` is genuinely exercised |
 | `answers.js` | three consecutive page loads over six real link shapes — request counts, cache behaviour, and that deal-body variants keep their own ASINs |
 | `stability.js` | the cost of a link that stays unresolvable, and that the retry id is deterministic |
-| `cachekey.js` | what `getCacheKey()` must drop (everything that rotates between loads) and must keep (everything that separates two links, including the post a link sits in) |
+| `cachekey.js` | what `getCacheKey()` must drop (everything that rotates between loads) and must keep (everything that separates two links) — including the block a link sits in: replies, the wiki, and featured comments, each asserted to key differently for the identical URL and anchor text |
 
 `answers.js` reproduces the real resolver ids (`19854408sdtid1lno`, `1311423pno19854408sdtid3lno`),
 which is the check that the fixtures are shaped like the page and not like a guess.
