@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.27** (26.11.26 released) |
+| Current | **v26.11.28** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -86,6 +86,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
 | 26.11.26 | — | **The deal button and image could never hit the cache** - plus one request per post link, and remembered failures |
 | 26.11.27 | — | **A link stating `slickdeals.net` as its destination was never unwrapped** - plus wiki/featured-comment scoping |
+| 26.11.28 | — | The host check no longer runs on ids that cannot be shared, so a cross-host redirect resolves |
 
 ---
 
@@ -536,6 +537,29 @@ can this field take where it tells me nothing?
 And the measuring rule earned another entry. `curl` reported `paze.com` for the very links the browser
 reports `slickdeals.net` for - the attribute itself differs between a signed-out fetch and a real
 session, not just `u3`. Markup, not only destinations, has to be confirmed from a browser.
+
+**A check that cannot be wrong has no job to do** (26.11.28). Two links in thread 19049776's wiki did
+not resolve. Probing the live service told them apart at once, and only one was ours:
+
+- `freetaxusa.com` - the service answers nothing usable, on the natural id and the perturbed one, on
+  repeated tries. A resolver-side dead end. The link keeps its href, still works, is never cached as
+  a failure (an empty answer is thrown out before the branch that records one) and is asked again on
+  the next load. Nothing to fix here.
+- `irs.treasury.gov/freetaxprep/` states `treasury.gov` and the service answers `https://www.irs.gov/`
+  - which is correct; that URL really does redirect across hosts. The host check rejected it.
+
+The second is the bug, and the fix is to notice what the check is *for*. It exists to catch an answer
+belonging to a **different link**, arriving because ids collide. An answer to an id the service held
+nothing for was resolved from this link's own `u3`, for this exact URL, so it cannot be another
+link's - and a host that disagrees then means the destination genuinely moves hosts. The check had
+nothing to catch and threw away a correct answer.
+
+So it now runs only where a collision remains possible: `!ask.unique`. The links that still go through
+it are the ones asked under an id they may share.
+
+The generalisation, and it is the counterpart to the three "no signal" entries above: **a check needs
+a failure mode it can actually catch.** Ask what it would be detecting on each path before running it
+there - on a path where the thing it detects cannot happen, every rejection it makes is a false one.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
