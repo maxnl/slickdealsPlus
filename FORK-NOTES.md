@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.25** |
+| Current | **v26.11.26** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -84,6 +84,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.23 | — | **The same, without any hardcoded networks - and the rei.com link resolves again** |
 | 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
 | 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
+| 26.11.26 | — | **The deal button and image could never hit the cache** - plus one request per post link, and remembered failures |
 
 ---
 
@@ -369,6 +370,116 @@ only after confirming it fails on the shipped 26.11.24 and passes on the fix.
 
 The wider point, and the third time this file has had to make it: *proving the mechanism* and
 *proving this build has the mechanism* are different claims. The first was true throughout.
+
+**Measure the thing before accepting its cost** (26.11.26). The two-request path was accepted as the
+price of keeping a deal body's colour links intact, on the belief that any unique id costs a second
+request. maxnl pushed back on that, and the belief did not survive contact with the service.
+
+Measured against the live resolver on thread 19854408 - curl-to-curl, which is valid for
+perturbation-invariance because both requests carry the same `u3`; only *where a link goes* needs a
+browser:
+
+| link class | natural id | asked naturally | perturbed |
+|---|---|---|---|
+| deal body (`pno` present) | already unique per link | all 8 colours -> their own ASIN, 1 request | `lno` replaced: all collapse to `B0GTNLL1H8`. `pcoid` added: Khaki -> `B0H2CM94NK` (wrong), Black -> correct |
+| post link (`lno`, no `pno`) | `<sdtid>sdtid<lno>lno`, shared by the first link of every post | rei.com link -> the thread's amazon product | `lno` replaced -> its own rei.com URL, first time |
+
+Two things fall out. **A deal body's links never needed anything** - their ids are already unique and
+already right, so the whole cost was being paid by post links only. And **`pcoid` is worse than
+`lno`**: it was correct for Black and wrong for Khaki, so a single sample would have made it look
+safe. That is the 26.11.15 mistake exactly, and it was avoided this time only by testing two links
+instead of one.
+
+So the perturbation goes back, restricted to where the id is ambiguous by construction - `lno`
+present, `pno` absent - which is the rule 26.11.19 shipped and 26.11.20 reverted. Reading 26.11.19's
+`resolverRequest()` again: it returned the natural id whenever `pno` was present, so it never
+touched a deal body's links, and the collapse maxnl saw cannot have come from it. **The revert was
+aimed at the wrong thing, and the real cause of that collapse is still unexplained.** The one
+explanation that fits is that the browser's markup omits `pno` where the fetched markup carries it -
+which would make this rule unsafe, and is why it is not merged without checking the browser first.
+
+The generalisation: an accepted cost deserves the same scepticism as a bug report. "This is the price
+of correctness" is a claim, and it can be measured like any other.
+
+**`u3` is the condition; `pno` was a symptom of it.** The rule above was first written as "`lno`
+present, `pno` absent", which is what 26.11.19 used. maxnl asked whether the `u3` details were right,
+and checking them produced the better rule.
+
+`u3` carries the destination itself, encrypted. A link that has one can be resolved from the URL
+alone, so asking under an id the service holds nothing for makes it decrypt `u3` rather than answer
+from what it already holds - and what it already holds is another link's destination. A link with no
+`u3` has nothing in it to resolve from: the service identifies it by the parameters, `lno` among
+them, so changing `lno` asks about a different link. That is one mechanism explaining both halves of
+the table above, where `pno` only correlated.
+
+Measured over both fixture threads: every link that takes the perturbed path carries `u3` (3 of 3),
+and no deal-body link does (0 of 12). All three conditions are now required, so the markup would have
+to change in three ways at once before a deal's links could be perturbed - which also means the
+open question about whether the browser's markup carries `pno` no longer gates the change.
+
+Two `u3` invariants worth not breaking, both verified rather than assumed:
+
+- `getCacheKey()` **strips** `u3`, because it is per-pageview. Two loads of the same page give
+  different `u3` and must give the same key, or nothing would ever hit the local cache.
+- the perturbed request **keeps** `u3`, because it is the destination. Perturbing `lno` while
+  dropping `u3` would ask the service to resolve nothing.
+
+**Cache compatibility with upstream.** Of 45 resolver-bound links across both fixture threads, 38
+are sent with an id *and* URL byte-identical to what V@no's script sends, so those share his cached
+entries in both directions. The 7 that diverge are exactly the post links whose shared id answers
+with another link's destination - the entry we would be sharing is the wrong one, so not sharing it
+is the point. Nothing overwrites an upstream entry; the divergent ids are additional, deterministic,
+and asked at most once per link thanks to the local cache.
+
+**A cache nobody can read is not a cache** (26.11.26). Asked whether the local cache was really being
+used, the answer turned out to be "not for the two most-used links on a deal page". `getCacheKey()`
+strips the parameters that change between pageviews, and two of them were missing: `pv` and `au`.
+
+Measured by keying two fetches of thread 19854408 taken a day apart: 12 of 14 links kept their key,
+and the 2 that did not were the deal's own `Get Deal at Amazon` button and its image. Their key was
+different on every pageview, so the entry written on one load could never be found on the next, and
+those two links re-asked the service on **every single page load, for the life of the install** -
+while looking perfectly healthy, because they always resolved. With `pv` and `au` stripped, 14 of 14
+are stable. Every key changes shape, so the cache is cleared once on upgrade.
+
+`trd` was stripped too, briefly, and then put back - which is the more interesting half. It is only
+the anchor's text and cannot affect a destination, and stripping it merges the sticky-bar button with
+the deal image, saving a request. But links in different posts of one thread are
+`sdtid=<thread>&lno=<n>&sdfid=9`, where `lno` restarts in every post and `sdfid` is the *forum*, not
+the post. Strip `trd` as well and two posts' first links key identically - one destination handed to
+two different links, which is the exact bug this key exists to prevent, reintroduced in the name of
+saving one request.
+
+The generalisation, and it cuts both ways from the note above: over-stripping is only safe while
+something else still tells two links apart. Check what that something is before removing anything -
+here it was the one parameter that looked most obviously useless.
+
+**And the post a link sits in belongs in the key too** (26.11.26). maxnl's follow-up: anchor text can
+change, and the same text can appear more than once with different destinations. Both are true, and
+the second is the dangerous one - a changed text is a cache miss that heals itself, while two links
+sharing a key hand one destination to both.
+
+`lno` restarts at 1 in every post, `sdfid` is the *forum* rather than the post, and `trd` is the
+anchor text truncated to 32 characters with punctuation stripped. So two posts in one thread, each
+with a first link labelled `here` or `this one` - or two long URLs agreeing for 32 characters - have
+nothing left in the URL to tell them apart. The post id is in the DOM, is permanent, and is the one
+thing that does.
+
+Cost, measured over 76 links on four pages: 33 cache keys become 34. The single extra is a link the
+deal page renders twice, once inside a post and once outside; it now resolves under two keys instead
+of one. One request, once, then both cached.
+
+Worth recording what this measurement *cannot* show. No sample here contains two different posts each
+linking somewhere different under the same words, so the bug was never observed - only shown to be
+possible from the shape of the URLs. The guard costs 1.3% more requests, which is cheap enough that
+it does not need the bug to be demonstrated first. An earlier attempt to detect the clash by looking
+for one cache key covering two `u3` values was abandoned: `u3` differs per *rendered instance*, not
+per destination, so it flags a link the page renders twice and proves nothing.
+
+**How the href behaves between loads**, since this keeps coming up: of 14 `/click` links compared
+across two fetches three seconds apart, 11 hrefs were byte-identical and 3 differed - only ever in
+`pv`, `au` and `u3`. The stable part of the href really is stable; those three rotate, which is
+exactly why they are stripped.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the

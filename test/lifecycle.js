@@ -21,11 +21,13 @@ const blocks = [
 	cut("const isHostShaped = value =>", ".test(value);"),
 	cut("const decodeResolved = (id, response) =>", "\n};"),
 	cut("const resolveFinalHop = (urlObject, key) =>", "\n};"),
+	cut("const askFor = (urlObject, key, id) =>", "\n};"),
+	cut("const resolveNatural = (id, href) =>", '.catch(() => "");'),
 	cut("const isDestinationPlausible = (() =>", "\n})();"),
 ];
 const NET = { calls: [] };
 const shipped = new Function("resolveUrl", "TextEncoder", "TextDecoder",
-	blocks.join("\n") + "\nreturn {getCacheKey,getUrlId,isDestinationPlausible,resolveFinalHop,decodeResolved};");
+	blocks.join("\n") + "\nreturn {getCacheKey,getUrlId,isDestinationPlausible,resolveFinalHop,decodeResolved,askFor,resolveNatural};");
 
 // stubbed transport: records every request the script would make
 const WORLD = {};                       // id -> destination the service answers
@@ -45,6 +47,7 @@ const S = shipped(resolveUrl, TextEncoder, TextDecoder);
 /* processLinks()'s control flow for one link, transcribed from the shipped
  * source (the surrounding loop is not extractable - it is inside a 90-line
  * function - so the FLOW is mirrored and every DECISION is delegated). */
+const RETRY_AFTER = Number(new Function(cut("const RESOLVE_RETRY_AFTER =", ";") + "\nreturn RESOLVE_RETRY_AFTER;")());
 const cache = new Map();                                  // the localStorage link cache
 const visit = async (href, stated) => {
 	const urlObject = new URL(href);
@@ -55,17 +58,26 @@ const visit = async (href, stated) => {
 
 	const q = new URLSearchParams(urlObject.search);
 	let url = q.has("u2") ? q.get("u2") : cache.get(key);
+	// remembered failure, as shipped: [ "", when ], expiring after RESOLVE_RETRY_AFTER
+	if (Array.isArray(url) && !url[0]) {
+		if (Date.now() - (url[1] || 0) < RETRY_AFTER)
+			return { outcome: "remembered failure", requests: 0, dest: "" };
+		url = "";
+	}
 	if (url) return { outcome: "CACHE HIT", requests: 0, dest: url };
 
 	const before = NET.calls.length;
-	const raw = await resolveUrl(id, href);
-	let response = S.decodeResolved(id, raw);
+	const ask = S.askFor(urlObject, key, id);
+	const raw = await resolveUrl(ask.id, ask.url);
+	let response = S.decodeResolved(ask.id, raw);
 	if (!response) return { outcome: "no answer", requests: NET.calls.length - before, dest: "" };
 
 	if (!S.isDestinationPlausible(elLink, response)) {
-		const final = await S.resolveFinalHop(urlObject, key);
-		if (!final || !S.isDestinationPlausible(elLink, final))
+		const final = ask.unique ? await S.resolveNatural(id, href) : await S.resolveFinalHop(urlObject, key);
+		if (!final || !S.isDestinationPlausible(elLink, final)) {
+			cache.set(key, ["", Date.now()]);
 			return { outcome: "REJECTED (link left alone)", requests: NET.calls.length - before, dest: "" };
+		}
 		cache.set(key, final);
 		return { outcome: "retry -> FOLLOWED ON", requests: NET.calls.length - before, dest: final };
 	}
