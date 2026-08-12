@@ -1,6 +1,6 @@
 # Handoff — link resolution
 
-State as of **v26.11.29**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
+State as of **v26.11.30**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
 architecture notes and the full history of what was tried and why it failed. This file holds only
 what a new session needs to pick the work up.
 
@@ -13,7 +13,7 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.29**, confirmed in a browser for the Amazon variants, the rei.com
+Released and current: **v26.11.30**, confirmed in a browser for the Amazon variants, the rei.com
 link, the Timex links, a wiki thread, a multi-post thread and a thread whose wiki links state a host
 they do not end on.
 
@@ -24,7 +24,8 @@ they do not end on.
 | 26.11.26 | good, superseded - one request per link, `pv`/`au` cache-key fix, remembered failures |
 | 26.11.27 | good, superseded - a link stating its own host is no longer read as a claim; wiki and featured-comment scoping |
 | 26.11.28 | good, superseded - the host check runs only on ids that can be shared |
-| 26.11.29 | **current** - a "no destination" answer is remembered instead of re-asked every load |
+| 26.11.29 | good, superseded - a "no destination" answer is remembered instead of re-asked every load |
+| 26.11.30 | **current** - removes a branch 26.11.28 stranded, and its orphaned helper |
 
 Confirmed working in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com
 post link resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21
@@ -36,6 +37,26 @@ is remembered as failed for a week:
 ```js
 localStorage.removeItem("slickdeals+links"); location.reload();
 ```
+
+---
+
+## 2a. Request cost, as it actually stands
+
+Measured over 248 resolver-bound links across every saved page:
+
+| path | links | cost |
+|---|---|---|
+| unique id, host check skipped | 32 | always 1 request |
+| no usable claim, host check skipped | 22 | always 1 request |
+| still host-checked | **194** | 1 if the answer matches the stated host, **2 if not** |
+
+So the two-request path is **not gone** - it is unreachable for 54 links and live for 194. Every link
+actually resolved against the service in testing took one request, but a cross-host answer on any of
+those 194 would cost a second. Do not describe the script as "one request per link" without that
+qualification.
+
+After the first load all of them cost nothing: destinations are cached, and so now are both terminal
+failures.
 
 ---
 
