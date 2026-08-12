@@ -54,6 +54,17 @@ These are two different mechanisms, which is why they have separate switches:
 Leaving **Resolve links** off keeps the benefit of unwrapping with no external lookups at all.
 Resolved destinations are cached in your browser, so a link is normally looked up only once.
 
+> **As of August 2026, unwrapping appears to do nothing.** Across every page sampled — 248 wrapped
+> links on deal pages, forum threads, the front page and category listings — **not one** carried its
+> destination inside it. Slickdeals seems to have stopped including it, so in practice every link now
+> needs **Resolve links** to be unwrapped at all. **Unwrap tracking links** is left enabled and
+> harmless in case that changes; if you turn **Resolve links** off today, expect links to stay
+> wrapped.
+
+Some links cannot be resolved even then. Where Slickdeals hands the browser an intermediate page
+rather than a redirect, there is no chain for the service to follow and it says so; those links stay
+as they are, still working, and are re-checked about once a week.
+
 ### Seeing it work
 
 A link that has been given its real destination shows green; one still waiting shows blue. On a deal
