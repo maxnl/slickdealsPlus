@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.26** (released) |
+| Current | **v26.11.27** (26.11.26 released) |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -85,6 +85,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.24 | — | Only a hostname-shaped value is believed as a destination claim - prose is not a claim |
 | 26.11.25 | — | **Restores a function 26.11.23 deleted while still calling it - link resolving was broken in 26.11.23-24** |
 | 26.11.26 | — | **The deal button and image could never hit the cache** - plus one request per post link, and remembered failures |
+| 26.11.27 | — | The wiki block and featured comments are scoped like replies - first *observed* collisions, not deduced |
 
 ---
 
@@ -480,6 +481,30 @@ per destination, so it flags a link the page renders twice and proves nothing.
 across two fetches three seconds apart, 11 hrefs were byte-identical and 3 differed - only ever in
 `pv`, `au` and `u3`. The stable part of the href really is stable; those three rotate, which is
 exactly why they are stripped.
+
+**Post content renders in three places, and the collision is real** (26.11.27). Everything above about
+colliding ids was deduced from the shape of the URLs; thread 19632174 shows it happening. That thread
+serves `19632174sdtid1lno` for **both** a dansdeals.com link and a capitalone.com one, and
+`19632174sdtid2lno` for **both** a dansdeals.com and a paze.com one. Four links, two collisions, four
+different destinations. Under the natural id the service answers each pair alike; the perturbation
+gives all four their own id.
+
+The reason is that a thread renders post content in three places, and only replies sit inside
+`[id^=post]`:
+
+| block | selector | scoped by |
+|---|---|---|
+| replies | `[id^=post]` | its own id |
+| wiki / community notes | `.communityNotesTab__post` | its class - a thread has exactly one |
+| featured comments | `.featuredComment` | the post id in its own permalink |
+
+`lno` restarts inside each block, which is why two blocks both start at 1. 26.11.26 scoped only the
+first, so links in the other two were separated by `trd` alone - fine while their anchor texts differ,
+which on this thread they do, but nothing guaranteed it.
+
+Also corrected: `lno` is **not** simply "the index within a post". On page 2 of thread 19854408 the
+first-post render is `lno=1` and the next post's links are `lno=2,3,4` - the count spans the block as
+rendered, and the visible `/click` links need not start at 1 because unwrapped links take numbers too.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
