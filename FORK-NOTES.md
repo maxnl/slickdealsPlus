@@ -111,8 +111,10 @@ the first link of every post in a thread shares an id. Using the resolver id as 
 links inherit whichever destination happened to resolve first (#1, #15).
 
 **What the resolver actually is** (26.11.14, measured directly over the network). The endpoint is
-`[resolver host redacted - assembled at runtime, see the encoded string at the foot of the script]` - V@no's own host, decoded from the obfuscated argument at the
-foot of the script, not a Slickdeals service.
+V@no's own host, not a Slickdeals service. Its address is **deliberately not written down here**: the
+script assembles it at runtime from the encoded string at the foot of the file, and upstream
+obfuscated it for a reason - spelling it out in a file GitHub indexes undoes that and points traffic
+at someone else's server. Decode that argument if you need it.
 
 It is **a cache in front of an on-demand resolver**, not the pure lookup table 26.11.13 recorded.
 Three things were measured, and the first two correct that earlier note:

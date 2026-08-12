@@ -115,9 +115,11 @@ node test/unit.js && node test/cachekey.js && node test/answers.js && node test/
 
 ## 6. Environment
 
-`slickdeals.net` and `slickdeals.net.vano.org` were both reachable. If a future container cannot
-reach them, set **Network access → Custom** with those two hosts and *"Also include default list of
-common package managers"* checked.
+`slickdeals.net` and the resolver host were both reachable. If a future container cannot reach them,
+set **Network access → Custom** with those two hosts and *"Also include default list of common
+package managers"* checked. The resolver's address is not written down in this repo on purpose - the
+script assembles it at runtime from the encoded string at the foot of the file, and upstream
+obfuscated it deliberately. Decode that argument when you need the hostname.
 
 - **The resolver requires `Origin` and `Referer`** — without them everything 404s with error `1.30`,
   which reads exactly like the service being down.
