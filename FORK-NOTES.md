@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.29** |
+| Current | **v26.11.30** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -88,6 +88,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.27 | — | **A link stating `slickdeals.net` as its destination was never unwrapped** - plus wiki/featured-comment scoping |
 | 26.11.28 | — | The host check no longer runs on ids that cannot be shared, so a cross-host redirect resolves |
 | 26.11.29 | — | A "no destination" answer is remembered, instead of being re-asked on every page load |
+| 26.11.30 | — | Removes a branch 26.11.28 made unreachable, and the helper it was the only caller of |
 
 ---
 
@@ -616,6 +617,18 @@ problem gets cached.
 The generalisation: **enumerate the terminal outcomes and check each one is handled.** There were
 three - resolved, wrong host, no destination - and two had a cache write. Missing the third cost a
 request per page load on exactly the links that can never benefit from it.
+
+**Code a change strands is not obvious from the change** (26.11.30). 26.11.28 narrowed the host check
+to `!ask.unique`. Inside that branch `ask.unique` is therefore always false - so the ternary choosing
+between `resolveNatural()` and `resolveFinalHop()` could only ever pick the second, and
+`resolveNatural()`, added two releases earlier for exactly that fallback, became unreachable. Nothing
+failed, no gate objected: `no-undef` only catches a name with no definition, never a definition with
+no live caller. It sat there for two releases, with a comment describing behaviour the code could no
+longer produce - which is worse than the dead code, because the comment reads as documentation.
+
+Found by asking of every helper "who calls this, and can that call still happen?" rather than by any
+tool. Worth repeating after any change that narrows a condition: the branch not taken may have been
+some function's only caller.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
