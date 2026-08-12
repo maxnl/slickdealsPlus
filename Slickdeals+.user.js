@@ -37,7 +37,8 @@ const FORK = "maxnl fork";
 const CHANGES = `* a link in a post is asked for under an id that identifies it, so it resolves in one request instead of two
 ! the deal's own button and image asked again on every single page load - their cache entry could never be found
 + a link that resolves to nothing is remembered for a week instead of being asked again on every page load
-# a deal's own links already have unique ids and are sent untouched - the colour variants keep their own products`;
+# a deal's own links already have unique ids and are sent untouched - the colour variants keep their own products
+# two posts linking to different places under the same words no longer share one answer`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2001,7 +2002,7 @@ const processLinks = (node, force) =>
 		if (!id)
 			continue;
 
-		const key = getCacheKey(urlObject);
+		const key = getCacheKey(urlObject, elLink);
 		const queryObject = new URLSearchParams(urlObject.search);
 		if (!elLink._elHover)
 		{
@@ -2378,6 +2379,80 @@ const updateLinks = () =>
  * @param {string} url - The URL to resolve.
  * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
  */
+/* ===========================================================================
+ * LINK RESOLUTION - the rules, and why they are not free to change
+ *
+ * Slickdeals wraps outbound links as `slickdeals.net/click?…`. Getting the
+ * merchant URL back happens one of two ways, and they are governed separately:
+ *
+ *   unwrapping  the destination is already in the link, in `u2`. Free, local,
+ *               private, no request at all. Setting: `unwrapLinks`.
+ *   resolving   the destination is not in the link, so it is asked of a third
+ *               party service. Setting: `resolveLinks`.
+ *
+ * Six things here are load-bearing. Every one of them was learned by breaking
+ * it, most of them more than once, so read this before changing any of them.
+ *
+ * 1. THE RESOLVER ID IS NOT OURS TO CHOOSE.
+ *    getUrlId() concatenates `<value><param>` over pno, sdtid, tid, pcoid, lno.
+ *    The service only recognises that shape, and it also checks that the id
+ *    agrees with the URL sent beside it - a disagreeing pair is refused with
+ *    error 7.122. So the id cannot encode the URL, cannot be a hash, and cannot
+ *    be made unique by fiat. The only way to change the id is to change the URL
+ *    and let getUrlId() re-derive it. A collision-free scheme was tried in
+ *    26.11.15 and 404'd every request.
+ *
+ * 2. `lno` SELECTS THE VARIANT, SO PERTURBING IT IS DESTRUCTIVE - EXCEPT WHERE
+ *    THE LINK CARRIES `u3`.
+ *    A deal body's colour links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and
+ *    `lno` is what picks the product. Replacing it collapses all eight onto the
+ *    deal's default (measured: every colour became B0GTNLL1H8). Adding `pcoid`
+ *    instead is worse - it was correct for Black and wrong for Khaki, so one
+ *    sample makes it look safe.
+ *    A link carrying `u3` is different in kind: `u3` IS the destination,
+ *    encrypted, so the service can resolve it from the URL alone and an id it
+ *    holds nothing for simply forces it to do that instead of answering with
+ *    what it already has. That is why askFor() requires `u3` before touching
+ *    `lno`, and why a deal body's links - which carry none - are sent exactly as
+ *    the page wrote them. Measured: 3 of 3 perturbed links carry `u3`, 0 of 12
+ *    deal-body links do.
+ *
+ * 3. THE DESTINATION CHECK READS `data-product-exitwebsite`, NEVER `trd`.
+ *    `trd` is the anchor's own text - `Dark+Gray`, `Deal Image` - truncated to
+ *    32 characters. 26.11.13 read it as a destination and rejected 228 of 287
+ *    links. And a stated value is believed only if it is shaped like a hostname:
+ *    prose cannot be satisfied by any host, so treating it as a claim would
+ *    reject a working link invisibly. Unreadable means no claim, not a
+ *    contradiction.
+ *
+ * 4. NO LISTS OF DOMAINS, EVER.
+ *    An answer on a host the anchor does not state is either another link's
+ *    destination (ids collide) or this link's own seen at an intermediate hop.
+ *    Nothing about the answer distinguishes them, but asking again under an id
+ *    the service holds nothing for does. 26.11.21 hardcoded four affiliate
+ *    networks instead; it worked for exactly those four and nothing else.
+ *
+ * 5. THE CACHE KEY MUST DROP WHAT ROTATES AND KEEP WHAT SEPARATES.
+ *    `u3`, `pv`, `au`, `adobeRef`, `peid`, `hash`, `auuid` and `sdtrk` change
+ *    between page loads; anything keyed on them can never be read back. `pv` and
+ *    `au` were missing until 26.11.26, which is why the deal's own button and
+ *    image re-asked the service on every single page load while looking healthy.
+ *    In the other direction `trd` and the containing post id must stay, because
+ *    `lno` restarts in every post and without them two posts' links can key
+ *    identically and share one destination.
+ *
+ * 6. STAY COMPATIBLE WITH UPSTREAM'S CACHE.
+ *    Anything not perturbed is sent with an id AND URL byte-identical to what
+ *    V@no's script sends, so both scripts read and fill the same entries -
+ *    measured at 38 of 45 links. The 7 that diverge are the post links whose
+ *    shared id answers with another link's destination; the entry we would be
+ *    sharing is the wrong one. Nothing ever overwrites an upstream entry.
+ *
+ * Fixtures and measurements live in `test/` and FORK-NOTES.md. One standing
+ * rule about measuring: whether the mechanism works can be checked with curl,
+ * but WHERE A LINK GOES cannot - a curl fetch gets a different `u3` than a real
+ * session, and that has produced wrong conclusions here at least four times.
+ * =========================================================================== */
 const resolveUrl = (id, url) => fetch(api + VERSION + "/" + id, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
 	.catch(fVoid);
@@ -2472,63 +2547,39 @@ const getCacheKey = (() =>
 	 * ids - across both fixture threads: none. */
 	const volatile = ["u3", "adobeRef", "peid", "hash", "auuid", "sdtrk", "pv", "au"];
 	const count = volatile.length;
-	return urlObject =>
+	return (urlObject, elLink) =>
 	{
 		const queryObject = new URLSearchParams(urlObject.search);
 		for (let i = 0; i < count; i++)
 			queryObject.delete(volatile[i]);
 
 		queryObject.sort();
-		return 0 + crc32(urlObject.pathname + "?" + queryObject.toString()) + "crc";
+		/* Which post the link sits in, when it sits in one.
+		 *
+		 * What is left of the URL above identifies a link only as well as `trd`
+		 * does, and `trd` is the anchor's text truncated to 32 characters with the
+		 * punctuation stripped. Two posts in one thread can hold links with the
+		 * same text and different destinations - `here`, `this one`, or two long
+		 * URLs agreeing for 32 characters - and `lno` restarts at 1 in every post,
+		 * so nothing else in the URL would tell them apart. They would share a
+		 * cache entry, and one destination would be applied to both.
+		 *
+		 * The post id is in the DOM and not in the URL, and it is permanent, so it
+		 * is the one stable thing that separates them. Measured over 76 links on
+		 * four pages: 33 cache keys become 34. The single extra is a link the deal
+		 * page renders twice, once inside a post and once outside, which now
+		 * resolves under two keys instead of one - one extra request, once, and
+		 * then both are cached.
+		 *
+		 * Only the *local* key changes. The id sent for a link whose id is already
+		 * unique is untouched, so nothing here affects what upstream's cache is
+		 * asked for. */
+		const elPost = elLink && elLink.closest ? elLink.closest("[id^='post']") : null;
+		const scope = elPost && elPost.id ? "#" + elPost.id : "";
+		return 0 + crc32(urlObject.pathname + "?" + queryObject.toString() + scope) + "crc";
 	};
 })();
 
-/**
- * Checks a destination against the host the anchor itself states.
- *
- * getCacheKey() stops links sharing a resolver id from inheriting each other's
- * destination locally, but it cannot help when the wrong destination is already
- * wrong on arrival - and it arrives wrong for links inside forum posts. `lno` is
- * the link index within a post and restarts at 1 in every post, so the first
- * link of every post in a thread is sent to the resolver as the same id
- * (`19854408sdtid1lno` for thread 19854408), and the service answers all of them
- * with one destination: the thread's own product page. A post linking to
- * rei.com came back as the deal's amazon.com page, carrying an `ascsubtag` from
- * an entirely different pageview. The id shape is not ours to change - see
- * getUrlId() - so the answer has to be checked instead.
- *
- * The signal is `data-product-exitwebsite`, which Slickdeals writes on the
- * anchor as a bare host: `rei.com`, `amazon.com`, `lowes.com`. Sampled across
- * 287 links on 25 threads it was hostname-shaped every time, over 15 distinct
- * hosts, and never a merchant name - `NALITARE via Amazon` states `amazon.com`.
- * An anchor without the attribute (about one in ten) is passed through
- * unchecked, exactly as a link with nothing to check against always was.
- *
- * This deliberately does NOT use `trd`. 26.11.13 did, on the reading that `trd`
- * held the sanitised outbound URL, and that reading was taken from a single
- * forum post whose anchor text *was* a URL - the one sample on which "sanitised
- * destination" and "sanitised anchor text" are the same string. `trd` follows
- * the anchor text: `Dark Gray` stores `Dark+Gray`, `Deal Image` stores
- * `Deal Image`. Measured against 287 links, comparing a host to it rejected 228
- * of them - the deal button and every deal image included.
- *
- * Only the host is compared, because only the host is reliable: the resolver
- * legitimately returns a different path (an Amazon `/dp/` link comes back as
- * `/gp/product/`, affiliate parameters get appended). A leading `www` and the
- * scheme are dropped from both sides, and a subdomain of the stated host counts
- * as a match.
- *
- * A mismatch is not proof of a collision - it is equally what an intermediate
- * hop looks like, when the service answers from a cache holding an affiliate
- * network rather than the shop. This function does not try to tell those apart,
- * and deliberately knows nothing about particular networks; the caller settles
- * it by asking again under an id the service holds nothing for and seeing
- * whether the answer reaches the stated host.
- * @function
- * @param {HTMLElement} elLink - The anchor being resolved.
- * @param {string} url - The destination to check.
- * @returns {boolean} false only when the anchor states a host and this is not it
- */
 /**
  * Registrable-ish host of a URL or bare hostname, lowercased, `www` and any
  * port removed, for comparing one against another.
@@ -2709,6 +2760,52 @@ const resolveNatural = (id, href) => resolveUrl(id, href)
 	.then(response => decodeResolved(id, response))
 	.catch(() => "");
 
+/**
+ * Checks a destination against the host the anchor itself states.
+ *
+ * getCacheKey() stops links sharing a resolver id from inheriting each other's
+ * destination locally, but it cannot help when the wrong destination is already
+ * wrong on arrival - and it arrives wrong for links inside forum posts. `lno` is
+ * the link index within a post and restarts at 1 in every post, so the first
+ * link of every post in a thread is sent to the resolver as the same id
+ * (`19854408sdtid1lno` for thread 19854408), and the service answers all of them
+ * with one destination: the thread's own product page. A post linking to
+ * rei.com came back as the deal's amazon.com page, carrying an `ascsubtag` from
+ * an entirely different pageview. The id shape is not ours to change - see
+ * getUrlId() - so the answer has to be checked instead.
+ *
+ * The signal is `data-product-exitwebsite`, which Slickdeals writes on the
+ * anchor as a bare host: `rei.com`, `amazon.com`, `lowes.com`. Sampled across
+ * 287 links on 25 threads it was hostname-shaped every time, over 15 distinct
+ * hosts, and never a merchant name - `NALITARE via Amazon` states `amazon.com`.
+ * An anchor without the attribute (about one in ten) is passed through
+ * unchecked, exactly as a link with nothing to check against always was.
+ *
+ * This deliberately does NOT use `trd`. 26.11.13 did, on the reading that `trd`
+ * held the sanitised outbound URL, and that reading was taken from a single
+ * forum post whose anchor text *was* a URL - the one sample on which "sanitised
+ * destination" and "sanitised anchor text" are the same string. `trd` follows
+ * the anchor text: `Dark Gray` stores `Dark+Gray`, `Deal Image` stores
+ * `Deal Image`. Measured against 287 links, comparing a host to it rejected 228
+ * of them - the deal button and every deal image included.
+ *
+ * Only the host is compared, because only the host is reliable: the resolver
+ * legitimately returns a different path (an Amazon `/dp/` link comes back as
+ * `/gp/product/`, affiliate parameters get appended). A leading `www` and the
+ * scheme are dropped from both sides, and a subdomain of the stated host counts
+ * as a match.
+ *
+ * A mismatch is not proof of a collision - it is equally what an intermediate
+ * hop looks like, when the service answers from a cache holding an affiliate
+ * network rather than the shop. This function does not try to tell those apart,
+ * and deliberately knows nothing about particular networks; the caller settles
+ * it by asking again under an id the service holds nothing for and seeing
+ * whether the answer reaches the stated host.
+ * @function
+ * @param {HTMLElement} elLink - The anchor being resolved.
+ * @param {string} url - The destination to check.
+ * @returns {boolean} false only when the anchor states a host and this is not it
+ */
 const isDestinationPlausible = (() =>
 {
 	return (elLink, url) =>

@@ -454,6 +454,33 @@ The generalisation, and it cuts both ways from the note above: over-stripping is
 something else still tells two links apart. Check what that something is before removing anything -
 here it was the one parameter that looked most obviously useless.
 
+**And the post a link sits in belongs in the key too** (26.11.26). maxnl's follow-up: anchor text can
+change, and the same text can appear more than once with different destinations. Both are true, and
+the second is the dangerous one - a changed text is a cache miss that heals itself, while two links
+sharing a key hand one destination to both.
+
+`lno` restarts at 1 in every post, `sdfid` is the *forum* rather than the post, and `trd` is the
+anchor text truncated to 32 characters with punctuation stripped. So two posts in one thread, each
+with a first link labelled `here` or `this one` - or two long URLs agreeing for 32 characters - have
+nothing left in the URL to tell them apart. The post id is in the DOM, is permanent, and is the one
+thing that does.
+
+Cost, measured over 76 links on four pages: 33 cache keys become 34. The single extra is a link the
+deal page renders twice, once inside a post and once outside; it now resolves under two keys instead
+of one. One request, once, then both cached.
+
+Worth recording what this measurement *cannot* show. No sample here contains two different posts each
+linking somewhere different under the same words, so the bug was never observed - only shown to be
+possible from the shape of the URLs. The guard costs 1.3% more requests, which is cheap enough that
+it does not need the bug to be demonstrated first. An earlier attempt to detect the clash by looking
+for one cache key covering two `u3` values was abandoned: `u3` differs per *rendered instance*, not
+per destination, so it flags a link the page renders twice and proves nothing.
+
+**How the href behaves between loads**, since this keeps coming up: of 14 `/click` links compared
+across two fetches three seconds apart, 11 hrefs were byte-identical and 3 differed - only ever in
+`pv`, `au` and `u3`. The stable part of the href really is stable; those three rotate, which is
+exactly why they are stripped.
+
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
 intermediate hop turn out to be the same question, asked twice.
