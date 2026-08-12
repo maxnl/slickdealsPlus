@@ -17,4 +17,19 @@ WORLD[S.getUrlId(uf)] = "https://www.still-not-it.com/y";
   const ids = new Set();
   for (let n = 0; n < 5; n++) { const v = new URL(href); v.searchParams.set("lno", S.getCacheKey(new URL(href)).replace(/\D/g,"")||"0"); ids.add(S.getUrlId(v)); }
   console.log("\n  distinct retry ids generated over 5 loads: " + ids.size + "  -> " + [...ids][0]);
+
+  // a link the service answers with "no destination" - the freetaxusa case.
+  // Structurally unresolvable, so it must not ask again on every load.
+  const href2 = B + "trd=freetaxusa&sdtid=19049776&lno=14&u3=ENC";
+  const u2 = new URL(href2);
+  WORLD[S.getUrlId(u2)] = "";                       // service answers, but empty
+  const uf2 = new URL(href2);
+  uf2.searchParams.set("lno", S.getCacheKey(u2).replace(/\D/g, "") || "0");
+  WORLD[S.getUrlId(uf2)] = "";
+  console.log("\na link the service has no destination for:");
+  for (let n = 1; n <= 3; n++) {
+    const before = NET.calls.length;
+    const r = await visit(href2, "freetaxusa.com");
+    console.log("  load " + n + ": " + (NET.calls.length - before) + " requests  " + r.outcome);
+  }
 })();
