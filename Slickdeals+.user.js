@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.27
+// @version      26.11.28
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.27";
+const VERSION = "26.11.28";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,13 +34,8 @@ const VERSION = "26.11.27";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! links whose stated destination was slickdeals.net itself were never unwrapped - it says nothing, so it is no longer read as a claim
-* links in a thread's wiki and in featured comments are told apart properly, like links in replies
-* a link in a post is asked for under an id that identifies it, so it resolves in one request instead of two
-! the deal's own button and image asked again on every single page load - their cache entry could never be found
-+ a link that resolves to nothing is remembered for a week instead of being asked again on every page load
-# a deal's own links already have unique ids and are sent untouched - the colour variants keep their own products
-# two posts linking to different places under the same words no longer share one answer`;
+const CHANGES = `! a link that redirects to a different site than it names now resolves - the check that rejected it had no job to do there
+# it only guards links asked under an id they might share with another link, which is the only way a wrong answer can arrive`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2191,7 +2186,21 @@ const processLinks = (node, force) =>
 					 * colour links, never reaches here. And the result is taken only
 					 * when it matches the stated host, so a fall back to the deal's
 					 * default cannot be accepted in its place. */
-					if (!isDestinationPlausible(elLink, response))
+					/* The check has a job only when the id could be shared.
+					 *
+					 * It exists to catch an answer that belongs to a *different*
+					 * link. An answer to an id the service held nothing for was
+					 * resolved from this link's own `u3`, for this exact URL, so it
+					 * cannot be another link's - and a host that disagrees then means
+					 * the destination genuinely redirects across hosts, not that the
+					 * answer is wrong. Thread 19049776 has the case:
+					 * `irs.treasury.gov/freetaxprep/` states `treasury.gov` and
+					 * really does end at `www.irs.gov`, and rejecting that left a
+					 * correct answer on the floor.
+					 *
+					 * So the check runs only where a collision is still possible -
+					 * links asked under an id they may share with others. */
+					if (!ask.unique && !isDestinationPlausible(elLink, response))
 					{
 						/* A unique ask has already been perturbed; asking again the
 						 * same way returns the same thing. Its fallback is the natural
