@@ -70,7 +70,11 @@ const visit = async (href, stated) => {
 	const ask = S.askFor(urlObject, key, id);
 	const raw = await resolveUrl(ask.id, ask.url);
 	let response = S.decodeResolved(ask.id, raw);
-	if (!response) return { outcome: "no answer", requests: NET.calls.length - before, dest: "" };
+	// mirrors the shipped code: a deliberate "no destination" is remembered
+	if (!response) {
+		cache.set(key, ["", Date.now()]);
+		return { outcome: "no destination (remembered)", requests: NET.calls.length - before, dest: "" };
+	}
 
 	// mirrors the shipped condition: the check guards only ids that may be shared
 	if (!ask.unique && !S.isDestinationPlausible(elLink, response)) {
