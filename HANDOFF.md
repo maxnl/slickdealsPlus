@@ -1,6 +1,6 @@
 # Handoff — link resolution
 
-State as of **v26.11.26**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
+State as of **v26.11.27**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
 architecture notes and the full history of what was tried and why it failed. This file holds only
 what a new session needs to pick the work up.
 
@@ -40,11 +40,16 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 Nothing on the list below has been settled; everything previously here has been.
 
-- **A thread whose wiki or featured comments contain two links with the same anchor text.** The
-  scoping added in 26.11.27 is what would separate them, and no sample has the case.
-- **Whether `unwrapLinks` ever fires.** No link in any sample carries `u2` (0 of 45), so the free
-  local-unwrap path may be dead on deal and post pages.
+- **Whether `unwrapLinks` ever fires anywhere.** Across 20 saved pages and 199 `/click` links, **not
+  one carries `u2`**, so the free local-unwrap path never runs on any page sampled. The setting may
+  be dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
+  evidence alone - confirm from a browser across a few page types first.
 - **Concurrency.** See below.
+
+*(A wiki or featured-comment block holding two same-text links is no longer on this list. It is hard
+to find in the wild, so `test/cachekey.js` now covers it with a fixture instead: two featured
+comments, a wiki block and a reply, all holding the identical URL and anchor text, asserted to key
+differently and to key stably across loads.)*
 
 ## 4. Open, not acted on
 
@@ -55,12 +60,15 @@ on the first load after any change in this area.
 
 **Unbounded concurrency.** `processLinks()` fires every request with no queue. Measured over curl the
 service serves ~4 at a time; a browser multiplexes over one HTTP/2 connection and may not trip it at
-all. Deliberately not acted on — measure from a browser first. Failure is graceful: an unresolved
-link is never cached, so the next load retries it.
+all. Deliberately not acted on — measure from a browser first.
 
-**No link in any sample carries `u2`** (0 of 45). The free local-unwrap path never fires on deal or
-post links, so `unwrapLinks` is effectively inert there. Worth confirming in a browser before
-concluding the setting does nothing.
+Failure is graceful, and this was re-checked when the negative cache went in. A rate-limited or failed
+request never reaches the branch that records a failure: `resolveUrl()` catches network errors to
+`undefined` and passes a non-ok response through unchanged, and both are thrown out at the top of the
+handler, before any `SETTINGS(key, …)` call. Only a *successful* answer that reaches the wrong host,
+whose fallback also reaches the wrong host, is remembered. So a rate-limited link stays `notResolved`,
+keeps its own href, and is asked again on the next page load — no timer, no in-page queue, no
+week-long marker.
 
 **Two latent traps, deliberately not patched.** Neither is a live bug; both are ways a future edit
 turns into a whole-script failure, so they are written down rather than guarded, to avoid another
