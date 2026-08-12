@@ -17,12 +17,12 @@ them and apply immediately, except where noted.
 
 <table>
   <tr>
-    <td align="center"><sub><b>Blueprint layout</b> — the current Slickdeals design</sub></td>
+    <td align="center"><sub><b>Default layout</b></sub></td>
     <td align="center"><sub><b>Classic layout</b></sub></td>
   </tr>
   <tr>
-    <td valign="top"><img src="https://github.com/vanowm/slickdealsPlus/assets/511517/328a7870-9e85-4e24-8fd4-ca3c328c248a" alt="Slickdeals+ on the Blueprint layout"></td>
-    <td valign="top"><img src="docs/menu.png" width="535" alt="The Slickdeals+ menu on the classic layout"></td>
+    <td valign="top"><img src="docs/menu.png" alt="The Slickdeals+ menu on the default layout"></td>
+    <td valign="top"><img src="docs/classic-menu.png" width="535" alt="The Slickdeals+ menu on the classic layout"></td>
   </tr>
 </table>
 

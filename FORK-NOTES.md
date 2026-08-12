@@ -577,6 +577,27 @@ Deliberately not built. It would point a link at what it *says* rather than at w
 returns, and the two can differ; the host match narrows that but does not close it. Recorded as a
 decision for maxnl rather than taken quietly - which is the same reason the domain lists came out.
 
+**And now the reason the resolver refuses it, which changes the case.** maxnl asked why this fails
+when Timex - also behind a referral network - worked. The difference is not the network, it is the
+*kind* of redirect.
+
+Fetching that `/click` URL once, without following redirects, returns **HTTP 200 with an HTML
+interstitial**, not a 302. The interstitial carries `<meta http-equiv="refresh">` pointing at a
+Commission Junction hop whose `url=` parameter holds `https://www.freetaxusa.com/`. The Timex chain
+is HTTP redirects, which the service follows; this one starts with a meta refresh, which is not a
+redirect at the HTTP level, so the service has nothing to follow and honestly answers "no
+destination". Retrying cannot help, and the emptiness was never staleness - a `u3` five seconds old
+behaves identically while its neighbours on the same page resolve.
+
+So this is a whole *class*: any link Slickdeals serves as a meta-refresh interstitial is unresolvable
+through the service, however many times it is asked. The destination is sitting in that interstitial,
+but reading it means fetching the `/click` URL, and every such fetch mints an `ascsubtag` and
+registers a click - the exact thing maxnl ruled out. The anchor text is the only source left that
+costs nothing.
+
+(Two diagnostic fetches of that URL were made to establish this. Diagnostic only, and not something
+the script may ever do.)
+
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
 intermediate hop turn out to be the same question, asked twice.
