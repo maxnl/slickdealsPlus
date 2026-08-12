@@ -61,12 +61,20 @@ differently and to key stably across loads.)*
 
 ## 4. Open, not acted on
 
-**One link the resolver simply will not answer.** `freetaxusa.com` in thread 19049776's wiki
-(`lno=14`). The service returns a well-formed *empty* destination - six bytes that unmask to `""` -
-not an error and not rate limiting. Verified four ways: under the natural id and the perturbed one,
-with a `curl`-derived `u3` and with the real `u3` copied out of a signed-in browser. There is nothing
-on this side to fix; the link keeps its own href, still works, is never cached as failed, and is
-asked again on each load. The anchor-text idea above is the only thing that would resolve it.
+**A whole class the resolver cannot answer: meta-refresh interstitials.** `freetaxusa.com` in thread
+19049776's wiki (`lno=14`) is the example. The service returns a well-formed *empty* destination -
+a few bytes unmasking to `""` - under the natural id and the perturbed one, with a `curl`-derived
+`u3`, with the real `u3` from a signed-in browser, and with a `u3` five seconds old while its
+neighbours on the same page resolve normally. Staleness is ruled out.
+
+The cause: that `/click` URL answers **HTTP 200 with an HTML interstitial**, not a 302. It carries a
+`<meta http-equiv="refresh">` to a Commission Junction hop whose `url=` parameter holds the real
+destination. Timex - also behind a referral network - is a chain of HTTP redirects, which the service
+follows. A meta refresh is not an HTTP redirect, so there is nothing to follow and the service
+answers honestly. No retry can help.
+
+Reading the interstitial ourselves would mean fetching the `/click` URL, which mints an `ascsubtag`
+and registers a click - ruled out. The anchor-text option above is the only free source.
 
 **The 26.11.19 colour collapse is still unexplained.** Its `resolverRequest()` returned the natural
 id whenever `pno` was present, so it never touched a deal body's links — yet the colours collapsed.
