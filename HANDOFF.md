@@ -1,6 +1,6 @@
 # Handoff — link resolution
 
-State as of **v26.11.28**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
+State as of **v26.11.29**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
 architecture notes and the full history of what was tried and why it failed. This file holds only
 what a new session needs to pick the work up.
 
@@ -13,7 +13,7 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.28**, confirmed in a browser for the Amazon variants, the rei.com
+Released and current: **v26.11.29**, confirmed in a browser for the Amazon variants, the rei.com
 link, the Timex links, a wiki thread, a multi-post thread and a thread whose wiki links state a host
 they do not end on.
 
@@ -23,7 +23,8 @@ they do not end on.
 | 26.11.25 | good - restored it, added the `no-undef` release gate |
 | 26.11.26 | good, superseded - one request per link, `pv`/`au` cache-key fix, remembered failures |
 | 26.11.27 | good, superseded - a link stating its own host is no longer read as a claim; wiki and featured-comment scoping |
-| 26.11.28 | **current** - the host check runs only on ids that can be shared, so a cross-host redirect resolves |
+| 26.11.28 | good, superseded - the host check runs only on ids that can be shared |
+| 26.11.29 | **current** - a "no destination" answer is remembered instead of re-asked every load |
 
 Confirmed working in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com
 post link resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21
@@ -46,7 +47,8 @@ Nothing on the list below has been settled; everything previously here has been.
   one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
   dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
   evidence alone - confirm from a browser across a few page types first.
-- **Whether to unwrap from the anchor text.** Some links show their destination as their own label.
+- **Whether to unwrap from the anchor text.** *Declined for now by maxnl; kept here as the only route
+  that would resolve the meta-refresh class.* Some links show their destination as their own label.
   Measured: 24 of 248 have URL-shaped anchor text, 15 of those are visibly truncated with an ellipsis
   and unusable, leaving **7 that are complete and whose host matches `data-product-exitwebsite`** -
   unwrappable with no request at all. That set includes the one link the resolver refuses (below).
@@ -74,7 +76,11 @@ follows. A meta refresh is not an HTTP redirect, so there is nothing to follow a
 answers honestly. No retry can help.
 
 Reading the interstitial ourselves would mean fetching the `/click` URL, which mints an `ascsubtag`
-and registers a click - ruled out. The anchor-text option above is the only free source.
+and registers a click - ruled out. The anchor-text option above is the only free source, and maxnl has
+decided against it for now.
+
+Since 26.11.29 that answer is **remembered** rather than re-asked on every page load. It expires after
+a week like any other recorded failure, so a link the service later learns about is still picked up.
 
 **The 26.11.19 colour collapse is still unexplained.** Its `resolverRequest()` returned the natural
 id whenever `pno` was present, so it never touched a deal body's links — yet the colours collapsed.

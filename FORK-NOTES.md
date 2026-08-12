@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.28** (released) |
+| Current | **v26.11.29** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -87,6 +87,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.26 | — | **The deal button and image could never hit the cache** - plus one request per post link, and remembered failures |
 | 26.11.27 | — | **A link stating `slickdeals.net` as its destination was never unwrapped** - plus wiki/featured-comment scoping |
 | 26.11.28 | — | The host check no longer runs on ids that cannot be shared, so a cross-host redirect resolves |
+| 26.11.29 | — | A "no destination" answer is remembered, instead of being re-asked on every page load |
 
 ---
 
@@ -597,6 +598,24 @@ costs nothing.
 
 (Two diagnostic fetches of that URL were made to establish this. Diagnostic only, and not something
 the script may ever do.)
+
+**And it was being asked again on every load** (26.11.29). maxnl's follow-up: is that answer cached,
+or does it keep retrying? It kept retrying. `decodeResolved()` returns `""` for an answer that is not
+a URL, and the handler's `if (!response) return;` sat *before* every `SETTINGS(key, …)` call, so the
+one terminal outcome that was never recorded was the one the service is most certain about.
+
+The asymmetry is the tell: a link whose answer reached the wrong host - which might be a collision,
+and might resolve differently next time - was remembered for a week, while a link the service
+explicitly has no destination for was asked again on every single page load, for the life of the
+install. Backwards. Both are now recorded the same way and expire the same way.
+
+Note what makes this safe: a failed or rate-limited request throws higher up, before this point, so
+only a *successful* answer carrying an empty destination is remembered. Nothing about a network
+problem gets cached.
+
+The generalisation: **enumerate the terminal outcomes and check each one is handled.** There were
+three - resolved, wrong host, no destination - and two had a cache write. Missing the third cost a
+request per page load on exactly the links that can never benefit from it.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
