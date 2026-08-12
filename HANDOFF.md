@@ -1,6 +1,6 @@
 # Handoff — link resolution
 
-State as of **v26.11.27**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
+State as of **v26.11.28**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
 architecture notes and the full history of what was tried and why it failed. This file holds only
 what a new session needs to pick the work up.
 
@@ -13,15 +13,17 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.27**, confirmed in a browser for the Amazon variants, the rei.com
-link, the Timex links, a wiki thread and a multi-post thread.
+Released and current: **v26.11.28**, confirmed in a browser for the Amazon variants, the rei.com
+link, the Timex links, a wiki thread, a multi-post thread and a thread whose wiki links state a host
+they do not end on.
 
 | version | state |
 | --- | --- |
 | 26.11.23, .24 | broken, superseded - shipped a call to a function deleted in the same commit |
 | 26.11.25 | good - restored it, added the `no-undef` release gate |
 | 26.11.26 | good, superseded - one request per link, `pv`/`au` cache-key fix, remembered failures |
-| 26.11.27 | **current** - a link stating its own host is no longer read as a claim; wiki and featured-comment scoping |
+| 26.11.27 | good, superseded - a link stating its own host is no longer read as a claim; wiki and featured-comment scoping |
+| 26.11.28 | **current** - the host check runs only on ids that can be shared, so a cross-host redirect resolves |
 
 Confirmed working in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com
 post link resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21
@@ -40,10 +42,16 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 Nothing on the list below has been settled; everything previously here has been.
 
-- **Whether `unwrapLinks` ever fires anywhere.** Across 20 saved pages and 199 `/click` links, **not
-  one carries `u2`**, so the free local-unwrap path never runs on any page sampled. The setting may
-  be dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
+- **Whether `unwrapLinks` ever fires anywhere.** Across every saved page - 248 `/click` links - **not
+  one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
+  dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
   evidence alone - confirm from a browser across a few page types first.
+- **Whether to unwrap from the anchor text.** Some links show their destination as their own label.
+  Measured: 24 of 248 have URL-shaped anchor text, 15 of those are visibly truncated with an ellipsis
+  and unusable, leaving **7 that are complete and whose host matches `data-product-exitwebsite`** -
+  unwrappable with no request at all. That set includes the one link the resolver refuses (below).
+  Not built: it would point a link at its displayed URL rather than at a resolved one, which is a
+  behaviour change maxnl should decide on rather than inherit.
 - **Concurrency.** See below.
 
 *(A wiki or featured-comment block holding two same-text links is no longer on this list. It is hard
@@ -52,6 +60,21 @@ comments, a wiki block and a reply, all holding the identical URL and anchor tex
 differently and to key stably across loads.)*
 
 ## 4. Open, not acted on
+
+**A whole class the resolver cannot answer: meta-refresh interstitials.** `freetaxusa.com` in thread
+19049776's wiki (`lno=14`) is the example. The service returns a well-formed *empty* destination -
+a few bytes unmasking to `""` - under the natural id and the perturbed one, with a `curl`-derived
+`u3`, with the real `u3` from a signed-in browser, and with a `u3` five seconds old while its
+neighbours on the same page resolve normally. Staleness is ruled out.
+
+The cause: that `/click` URL answers **HTTP 200 with an HTML interstitial**, not a 302. It carries a
+`<meta http-equiv="refresh">` to a Commission Junction hop whose `url=` parameter holds the real
+destination. Timex - also behind a referral network - is a chain of HTTP redirects, which the service
+follows. A meta refresh is not an HTTP redirect, so there is nothing to follow and the service
+answers honestly. No retry can help.
+
+Reading the interstitial ourselves would mean fetching the `/click` URL, which mints an `ascsubtag`
+and registers a click - ruled out. The anchor-text option above is the only free source.
 
 **The 26.11.19 colour collapse is still unexplained.** Its `resolverRequest()` returned the natural
 id whenever `pno` was present, so it never touched a deal body's links — yet the colours collapsed.
@@ -110,6 +133,28 @@ node test/unit.js && node test/cachekey.js && node test/answers.js && node test/
   least four times, including two retracted claims about Timex.
 - Measure how far a problem reaches rather than trusting the report that surfaced it. 26.11.13 was
   reported as a few colour links and was four links in five.
+
+---
+
+## 5a. Ask instead of assuming something is unavailable
+
+A standing instruction from maxnl, earned the hard way in this session more than once.
+
+When something cannot be reached from the container - a file, an image, a page, a service - **say so
+and ask**. Do not quietly conclude it is unavailable and route around it. The container's view is not
+the user's view, and the difference has been load-bearing here repeatedly:
+
+- `curl` reports a different `u3` **and different `data-product-exitwebsite` values** than a signed-in
+  browser. Four wrong conclusions came from treating the container's fetch as authoritative.
+- The upstream README screenshot returns 403 to `curl` with any user-agent, which says nothing about
+  whether it renders on the repo page for a real visitor.
+- A screenshot pasted into the conversation is not a file on disk. It has to be committed to the repo
+  before it can be edited - asking for the path takes one turn, guessing wastes several.
+- `slickdeals.net` resets headless Chromium, so "I cannot screenshot it" is true here and false for
+  the user.
+
+The cost is asymmetric: asking costs one turn, assuming costs a wrong conclusion that then has to be
+found and retracted. When the answer would change what gets built, ask before building.
 
 ---
 

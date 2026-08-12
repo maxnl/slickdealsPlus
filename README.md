@@ -15,11 +15,21 @@ This userscript blocks most, if not all, __ads__ and __trackers__, making the si
 Everything is a switch in the **Slickdeals+** menu in the site header. Settings save as you change
 them and apply immediately, except where noted.
 
-![The Slickdeals+ menu](docs/menu.png)
+<table>
+  <tr>
+    <td align="center"><sub><b>Default layout</b></sub></td>
+    <td align="center"><sub><b>Classic layout</b></sub></td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/menu.png" alt="The Slickdeals+ menu on the default layout"></td>
+    <td valign="top"><img src="docs/classic-menu.png" width="535" alt="The Slickdeals+ menu on the classic layout"></td>
+  </tr>
+</table>
 
 | Option | What it does |
 | --- | --- |
-| **Free Only** | Show only free items, and highlight them. The swatch beneath sets the colour. |
+| **Free items** | Free items are always highlighted. The swatch beneath **Free Only** sets the colour. |
+| **Free Only** | Additionally hide everything that is not free. |
 | **Unwrap tracking links** | Some Slickdeals links carry their real destination inside them. This reads it out and points the link straight at it, skipping the redirect. **Entirely local — nothing leaves your browser.** |
 | **Resolve links** | For links that *don't* carry their destination, look it up. **This is the only feature that sends anything anywhere:** the link and the page URL go to a third-party service, which returns the final destination. Turn it off to keep everything local. |
 | **Price first** | Show the price before the title instead of after it. |
