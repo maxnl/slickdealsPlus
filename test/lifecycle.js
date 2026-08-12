@@ -72,8 +72,9 @@ const visit = async (href, stated) => {
 	let response = S.decodeResolved(ask.id, raw);
 	if (!response) return { outcome: "no answer", requests: NET.calls.length - before, dest: "" };
 
-	if (!S.isDestinationPlausible(elLink, response)) {
-		const final = ask.unique ? await S.resolveNatural(id, href) : await S.resolveFinalHop(urlObject, key);
+	// mirrors the shipped condition: the check guards only ids that may be shared
+	if (!ask.unique && !S.isDestinationPlausible(elLink, response)) {
+		const final = await S.resolveFinalHop(urlObject, key);
 		if (!final || !S.isDestinationPlausible(elLink, final)) {
 			cache.set(key, ["", Date.now()]);
 			return { outcome: "REJECTED (link left alone)", requests: NET.calls.length - before, dest: "" };
