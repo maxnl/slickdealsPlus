@@ -3,7 +3,8 @@ const src = fs.readFileSync(require("path").join(__dirname, "..", "Slickdeals+.u
 const a = src.indexOf("const hostOf = value =>");
 const b = src.indexOf("})();", src.indexOf("const isDestinationPlausible")) + 5;
 const fn = new Function(src.slice(a, b) + "\nreturn isDestinationPlausible;")();
-const el = host => ({ dataset: host === null ? {} : { productExitwebsite: host } });
+const el = (host, href) => ({ dataset: host === null ? {} : { productExitwebsite: host },
+	_hrefOrig: href || "https://slickdeals.net/click?sdtid=1&lno=1" });
 const cases = [
 	// [stated host, resolved url, expected, why]
 	["rei.com",     "https://www.amazon.com/gp/product/B0GTNLL1H8/ref=x", false, "THE BUG: REI post link answered with the deal's amazon page"],
@@ -38,6 +39,14 @@ const cases = [
 	["AMAZON.COM",          "https://www.amazon.com/dp/x",          true,  "case-insensitive, still believed"],
 	["https://amazon.com/", "https://www.amazon.com/dp/x",          true,  "url-shaped value still believed"],
 	["xn--80ak6aa92e.com",  "https://www.amazon.com/dp/x",          false, "punycode host is a claim, still rejects"],
+
+	// 26.11.27 - a link that states its OWN host states nothing (thread 19632174)
+	["slickdeals.net", "https://www.paze.com/one",              true,  "NEW: wrapper naming itself is not a claim -> unchecked"],
+	["slickdeals.net", "https://slickdeals.net/f/1#post2",      true,  "NEW: and a link that really stays on site still passes"],
+	["slickdeals.net", "https://www.dansdeals.com/x",           true,  "NEW: any destination is allowed once there is no claim"],
+	// the guard must not swallow real claims
+	["paze.com",       "https://www.paze.com/one",              true,  "a real host still checked, and matches"],
+	["paze.com",       "https://www.amazon.com/dp/x",           false, "a real host still checked, and rejects"],
 ];
 let pass = 0, fail = 0;
 for (const [stated, url, expected, why] of cases) {

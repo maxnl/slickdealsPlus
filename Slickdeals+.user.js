@@ -34,7 +34,8 @@ const VERSION = "26.11.27";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `* links in a thread's wiki and in featured comments are told apart properly, like links in replies
+const CHANGES = `! links whose stated destination was slickdeals.net itself were never unwrapped - it says nothing, so it is no longer read as a claim
+* links in a thread's wiki and in featured comments are told apart properly, like links in replies
 * a link in a post is asked for under an id that identifies it, so it resolves in one request instead of two
 ! the deal's own button and image asked again on every single page load - their cache entry could never be found
 + a link that resolves to nothing is remembered for a week instead of being asked again on every page load
@@ -2875,6 +2876,35 @@ const isDestinationPlausible = (() =>
 		 * unchecked is how every link behaved before the check existed, while a
 		 * claim nothing can satisfy silently rejects a link that was fine. */
 		if (!isHostShaped(aStated))
+			return true;
+
+		/* A link that states its own host states nothing.
+		 *
+		 * These are `slickdeals.net/click?…` wrappers. When the anchor gives its
+		 * exit website as `slickdeals.net`, that is the wrapper describing itself,
+		 * not a destination - it is true of every link here and so distinguishes
+		 * none of them. Thread 19632174 is the case: its deal-body links to
+		 * paze.com all state `slickdeals.net`, so the paze.com answer looked like
+		 * the wrong site and five links were left wrapped, while `original post` -
+		 * which really does go to slickdeals.net - passed. The same pages linked
+		 * from post content state `paze.com` and resolved fine.
+		 *
+		 * So compare against the link's own host and treat a match as no claim,
+		 * exactly as prose is treated. Nothing is keyed to a particular domain:
+		 * the rule is "the destination the anchor names is the site it already is",
+		 * which is information-free wherever it appears.
+		 *
+		 * Safe to leave unchecked, because the check is not what protects these.
+		 * A link with `pno` already has an id unique to it, and a post link is
+		 * asked under a perturbed id - either way the answer was resolved for this
+		 * exact URL and cannot be another link's. */
+		let own = "";
+		try
+		{
+			own = hostOf(new URL(elLink._hrefOrig || elLink.href).hostname);
+		}
+		catch { /* no usable href - fall through and check normally */ }
+		if (own && own === aStated)
 			return true;
 
 		return aHost === aStated || aHost.endsWith("." + aStated) || aStated.endsWith("." + aHost);
