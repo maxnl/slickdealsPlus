@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.28** |
+| Current | **v26.11.28** (released) |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -562,6 +562,41 @@ it are the ones asked under an id they may share.
 The generalisation, and it is the counterpart to the three "no signal" entries above: **a check needs
 a failure mode it can actually catch.** Ask what it would be detecting on each path before running it
 there - on a path where the thing it detects cannot happen, every rejection it makes is a false one.
+
+**What the resolver will not answer, and what that leaves.** `freetaxusa.com` in thread 19049776
+returns a well-formed empty destination - six bytes unmasking to `""` - under the natural id and the
+perturbed one, with a `curl`-derived `u3` and with the real `u3` from a signed-in browser. It is a
+deliberate "no destination", not a failure, so no retry helps.
+
+Which raises the one source not yet used: the anchor's own text. Some links are labelled with the URL
+they point at. Measured over every saved page: 24 of 248 `/click` links have URL-shaped anchor text,
+15 of those carry a display ellipsis and are unusable, and **7 are complete with a host matching
+`data-product-exitwebsite`** - resolvable with no request at all, `freetaxusa.com` among them.
+
+Deliberately not built. It would point a link at what it *says* rather than at what the resolver
+returns, and the two can differ; the host match narrows that but does not close it. Recorded as a
+decision for maxnl rather than taken quietly - which is the same reason the domain lists came out.
+
+**And now the reason the resolver refuses it, which changes the case.** maxnl asked why this fails
+when Timex - also behind a referral network - worked. The difference is not the network, it is the
+*kind* of redirect.
+
+Fetching that `/click` URL once, without following redirects, returns **HTTP 200 with an HTML
+interstitial**, not a 302. The interstitial carries `<meta http-equiv="refresh">` pointing at a
+Commission Junction hop whose `url=` parameter holds `https://www.freetaxusa.com/`. The Timex chain
+is HTTP redirects, which the service follows; this one starts with a meta refresh, which is not a
+redirect at the HTTP level, so the service has nothing to follow and honestly answers "no
+destination". Retrying cannot help, and the emptiness was never staleness - a `u3` five seconds old
+behaves identically while its neighbours on the same page resolve.
+
+So this is a whole *class*: any link Slickdeals serves as a meta-refresh interstitial is unresolvable
+through the service, however many times it is asked. The destination is sitting in that interstitial,
+but reading it means fetching the `/click` URL, and every such fetch mints an `ascsubtag` and
+registers a click - the exact thing maxnl ruled out. The anchor text is the only source left that
+costs nothing.
+
+(Two diagnostic fetches of that URL were made to establish this. Diagnostic only, and not something
+the script may ever do.)
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
