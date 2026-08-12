@@ -90,6 +90,19 @@ link is never cached, so the next load retries it.
 post links, so `unwrapLinks` is effectively inert there. Worth confirming in a browser before
 concluding the setting does nothing.
 
+**Two latent traps, deliberately not patched.** Neither is a live bug; both are ways a future edit
+turns into a whole-script failure, so they are written down rather than guarded, to avoid another
+change in an area that has been churned enough.
+
+- `fixCSS()` calls `document.body.querySelector(query)` on whatever precedes `[data-v-ID]` on a CSS
+  line, with no guard. Every current rule puts a complete selector there - checked, 44 of 44 parse -
+  but a rule that splits a selector across lines would make `querySelector` throw, and the throw
+  escapes `String.replace` and aborts `init()`. If you add `[data-v-ID]` rules, keep the whole
+  selector on one line, or wrap that call in a try/catch returning `query`.
+- `highlightCards()` uses `$$(…, true)` without the `|| []` that `processLinks()` has. `$$` swallows
+  exceptions and returns `undefined`, so an invalid selector there becomes a TypeError on
+  `nlItems.length` rather than an empty result. The selectors are static, so this cannot fire today.
+
 **README screenshot of the classic-layout menu.** Requested, never done — the site resets headless
 Chromium here, so no genuine screenshot can be taken. Needs capturing by hand.
 
