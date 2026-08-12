@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.29
+// @version      26.11.30
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.29";
+const VERSION = "26.11.30";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,7 @@ const VERSION = "26.11.29";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `* a link the service says it has no destination for is remembered, instead of being asked again on every page load
-# some links cannot be resolved at all - it is asked again in a week in case that changes`;
+const CHANGES = `# removes a branch that could no longer run, and the function it was the only caller of`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2219,15 +2218,10 @@ const processLinks = (node, force) =>
 					 * links asked under an id they may share with others. */
 					if (!ask.unique && !isDestinationPlausible(elLink, response))
 					{
-						/* A unique ask has already been perturbed; asking again the
-						 * same way returns the same thing. Its fallback is the natural
-						 * id - which may be another link's answer, so it is checked
-						 * like everything else. Either way this caps at two requests
-						 * and is one in the common case. */
-						const again = ask.unique
-							? resolveNatural(id, elLink._hrefOrig)
-							: resolveFinalHop(urlObject, key);
-						return again.then(final =>
+						/* Only a shared id gets here, so the second ask is always the
+						 * one under an id the service holds nothing for. Caps at two
+						 * requests, and is one in every case measured. */
+						return resolveFinalHop(urlObject, key).then(final =>
 						{
 							if (!final || !isDestinationPlausible(elLink, final))
 							{
@@ -2802,20 +2796,6 @@ const askFor = (urlObject, key, id) =>
 
 	return {id: idFresh, url: urlFresh.href, unique: true};
 };
-
-/**
- * Asks under the natural, unmodified id - the fallback when a unique ask came
- * back somewhere the anchor does not state. Nothing is perturbed here, so this
- * is always safe to call; it just may be answered with another link's
- * destination, which is why the caller checks it too.
- * @function
- * @param {string} id - The natural id.
- * @param {string} href - The link's own href, exactly as the page wrote it.
- * @returns {Promise<string>} the destination, or "" if it could not be had
- */
-const resolveNatural = (id, href) => resolveUrl(id, href)
-	.then(response => decodeResolved(id, response))
-	.catch(() => "");
 
 /**
  * Checks a destination against the host the anchor itself states.

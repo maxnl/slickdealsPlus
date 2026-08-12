@@ -22,12 +22,11 @@ const blocks = [
 	cut("const decodeResolved = (id, response) =>", "\n};"),
 	cut("const resolveFinalHop = (urlObject, key) =>", "\n};"),
 	cut("const askFor = (urlObject, key, id) =>", "\n};"),
-	cut("const resolveNatural = (id, href) =>", '.catch(() => "");'),
 	cut("const isDestinationPlausible = (() =>", "\n})();"),
 ];
 const NET = { calls: [] };
 const shipped = new Function("resolveUrl", "TextEncoder", "TextDecoder",
-	blocks.join("\n") + "\nreturn {getCacheKey,getUrlId,isDestinationPlausible,resolveFinalHop,decodeResolved,askFor,resolveNatural};");
+	blocks.join("\n") + "\nreturn {getCacheKey,getUrlId,isDestinationPlausible,resolveFinalHop,decodeResolved,askFor};");
 
 // stubbed transport: records every request the script would make
 const WORLD = {};                       // id -> destination the service answers
