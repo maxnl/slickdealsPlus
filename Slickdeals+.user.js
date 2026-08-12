@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.28
+// @version      26.11.29
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.28";
+const VERSION = "26.11.29";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,8 +34,8 @@ const VERSION = "26.11.28";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! a link that redirects to a different site than it names now resolves - the check that rejected it had no job to do there
-# it only guards links asked under an id they might share with another link, which is the only way a wrong answer can arrive`;
+const CHANGES = `* a link the service says it has no destination for is remembered, instead of being asked again on every page load
+# some links cannot be resolved at all - it is asked again in a week in case that changes`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -2158,7 +2158,24 @@ const processLinks = (node, force) =>
 				try
 				{
 					if (!response)
+					{
+						/* The service answered, and its answer is "I have no
+						 * destination for this link".
+						 *
+						 * That is not a failure - a failed or rate-limited request
+						 * threw above, before reaching here - so it is worth
+						 * remembering. Some links cannot be resolved at all: where
+						 * Slickdeals serves a meta-refresh interstitial instead of an
+						 * HTTP redirect there is no redirect chain to follow, and the
+						 * service says so every time. Left unrecorded, such a link
+						 * asks again on every page load for the life of the install.
+						 *
+						 * Recorded the same way a rejected answer is, and expiring the
+						 * same way, so a link the service later learns about still
+						 * gets picked up. */
+						SETTINGS(key, ["", Date.now()]);
 						return;
+					}
 
 					/* An answer whose host is not the one the anchor states is one
 					 * of two things, and they cannot be told apart by looking:
