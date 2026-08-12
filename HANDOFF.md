@@ -172,3 +172,8 @@ obfuscated it deliberately. Decode that argument when you need the hostname.
 - **Error codes:** `1.30` missing Origin/Referer. `7.122` id disagrees with the submitted URL.
 - It rate-limits by concurrency, not volume. Space probes ~2s apart.
 - `slickdeals.net` resets headless Chromium but serves `curl` with a browser user-agent.
+- **Branch deletion is not possible from here.** `git push origin --delete <branch>` returns HTTP 403
+  through the environment's git proxy, which permits pushes but not ref deletion, and the GitHub tools
+  available expose `create_branch` with no delete counterpart. Merged branches have to be removed by
+  hand - repo → **Branches** → the bin icon next to each - or with `git push origin --delete <branch>`
+  from a normal clone. Say so and ask rather than reporting them as deleted.
