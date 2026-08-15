@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.30
+// @version      26.11.31
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.30";
+const VERSION = "26.11.31";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,7 @@ const VERSION = "26.11.30";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `# removes a branch that could no longer run, and the function it was the only caller of`;
+const CHANGES = `# guards two places where one bad css selector could have stopped the whole script`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1946,7 +1946,7 @@ const highlightCards = node =>
 						"div.resultRow," + //search result
 						"div.dealRow," + //list view on /deals/
 						"div.dealitem" //classic layout, both #deal_list and #deal_list_featured
-		, node, true);
+		, node, true) || [];   //$$ swallows a bad selector and returns undefined
 
 	if (nlItems.length === 0)
 		return;
@@ -2940,7 +2940,23 @@ const fixCSS = () =>
 	const cssFindId = reCssFindId.test.bind(reCssFindId);
 	style.innerHTML = css.replace(/^(.*)\[data-v-ID]/gm, (txt, query) =>
 	{
-		const element = document.body.querySelector(query);
+		/* `query` is whatever precedes `[data-v-ID]` on the line, so a rule that
+		 * split its selector across lines would hand querySelector a fragment,
+		 * and the throw would escape String.replace and abort init() - taking the
+		 * whole script with it. Every current rule keeps its selector on one line
+		 * (44 of 44 parse), so this cannot fire today; it is guarded because the
+		 * failure is total and silent, and the next person adding a rule has no
+		 * way to know. Falling through leaves the selector unresolved, which
+		 * costs that one rule and nothing else. */
+		let element;
+		try
+		{
+			element = document.body.querySelector(query);
+		}
+		catch
+		{
+			return query;
+		}
 		if (element)
 		{
 			const keys = Object.keys(element.dataset);
