@@ -50,9 +50,12 @@ Measured over 248 resolver-bound links across every saved page:
 | no usable claim, host check skipped | 22 | always 1 request |
 | still host-checked | **194** | 1 if the answer matches the stated host, **2 if not** |
 
-So the two-request path is **not gone** - it is unreachable for 54 links and live for 194. Every link
-actually resolved against the service in testing took one request, but a cross-host answer on any of
-those 194 would cost a second. Do not describe the script as "one request per link" without that
+So the two-request path is **not gone** - it is unreachable for 54 links and live for 194.
+
+Read that table carefully: it is a **static classification of which links could take two**, not a
+measurement that 194 took one. About twenty links were actually resolved against the live service,
+and every one of those took a single request under the current code. The other ~174 were never
+resolved live at all. Do not describe the script as "one request per link" without that
 qualification.
 
 After the first load all of them cost nothing: destinations are cached, and so now are both terminal
@@ -62,27 +65,32 @@ failures.
 
 ## 3. What still needs a browser
 
-Nothing on the list below has been settled; everything previously here has been.
+Genuinely open. Everything else previously listed here has been settled.
 
 - **Whether `unwrapLinks` ever fires anywhere.** Across every saved page - 248 `/click` links - **not
   one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
   dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
-  evidence alone - confirm from a browser across a few page types first.
-- **Whether to unwrap from the anchor text.** *Declined for now by maxnl; kept here as the only route
-  that would resolve the meta-refresh class.* Some links show their destination as their own label.
-  Measured: 24 of 248 have URL-shaped anchor text, 15 of those are visibly truncated with an ellipsis
-  and unusable, leaving **7 that are complete and whose host matches `data-product-exitwebsite`** -
-  unwrappable with no request at all. That set includes the one link the resolver refuses (below).
-  Not built: it would point a link at its displayed URL rather than at a resolved one, which is a
-  behaviour change maxnl should decide on rather than inherit.
-- **Concurrency.** See below.
+  evidence alone.
+- **Concurrency**, and only concurrency. See §4.
 
-*(A wiki or featured-comment block holding two same-text links is no longer on this list. It is hard
-to find in the wild, so `test/cachekey.js` now covers it with a fixture instead: two featured
-comments, a wiki block and a reply, all holding the identical URL and anchor text, asserted to key
-differently and to key stably across loads.)*
+---
 
-## 4. Open, not acted on
+## 3a. Decided - do not reopen without a reason
+
+- **Unwrapping from anchor text: declined** (maxnl, Aug 2026). 24 of 248 links have URL-shaped anchor
+  text; 15 are truncated with an ellipsis; **7** are complete with a host matching
+  `data-product-exitwebsite` and could be resolved with no request, including the one link the service
+  refuses. Declined because it would point a link at its displayed label rather than a resolved
+  destination, and those can differ. Recorded because it is the *only* route to the meta-refresh class.
+- **A wiki or featured-comment block holding two same-text links: covered by fixture, not hunted for.**
+  Hard to find in the wild, so `test/cachekey.js` builds it - two featured comments, a wiki block and
+  a reply all holding the identical URL and anchor text, asserted to key differently and stably.
+- **The resolver's address stays out of this repo.** The script assembles it at runtime from the
+  encoded string at the foot of the file. Decode that when you need it.
+- **The screenshot of the default layout is from v23.10.22** and shows fewer options than the table
+  beneath it. Left as is deliberately (maxnl, Aug 2026).
+
+## 4. Known, understood, and deliberately not acted on
 
 **A whole class the resolver cannot answer: meta-refresh interstitials.** `freetaxusa.com` in thread
 19049776's wiki (`lno=14`) is the example. The service returns a well-formed *empty* destination -
