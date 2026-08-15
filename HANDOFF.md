@@ -1,6 +1,6 @@
 # Handoff — link resolution
 
-State as of **v26.11.29**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
+State as of **v26.11.31**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
 architecture notes and the full history of what was tried and why it failed. This file holds only
 what a new session needs to pick the work up.
 
@@ -13,7 +13,7 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.29**, confirmed in a browser for the Amazon variants, the rei.com
+Released and current: **v26.11.31**, confirmed in a browser for the Amazon variants, the rei.com
 link, the Timex links, a wiki thread, a multi-post thread and a thread whose wiki links state a host
 they do not end on.
 
@@ -24,7 +24,9 @@ they do not end on.
 | 26.11.26 | good, superseded - one request per link, `pv`/`au` cache-key fix, remembered failures |
 | 26.11.27 | good, superseded - a link stating its own host is no longer read as a claim; wiki and featured-comment scoping |
 | 26.11.28 | good, superseded - the host check runs only on ids that can be shared |
-| 26.11.29 | **current** - a "no destination" answer is remembered instead of re-asked every load |
+| 26.11.29 | good, superseded - a "no destination" answer is remembered instead of re-asked every load |
+| 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
+| 26.11.31 | **current** - guards the two latent CSS traps; no behaviour change |
 
 Confirmed working in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com
 post link resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21
@@ -39,29 +41,113 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ---
 
-## 3. What still needs a browser
+## 1a. Start here next session
 
-Nothing on the list below has been settled; everything previously here has been.
+Three things are waiting, in order of value. All three need a browser; none can be done from a
+container.
+
+**1. The changelog panel renders one word per line.** Open bug, reproduced by maxnl on the classic
+layout at 26.11.30, screenshots in the session. The changelog block under **Changes** wraps every
+word onto its own line, and `more` sits beside the text instead of below it. Not diagnosable by
+reading the CSS - there are two layout paths and it is not certain which one is active. Run this with
+the menu open and **Changes expanded**:
+
+```js
+const c=document.querySelector('.changes'),d=c&&c.querySelector('div'),l=document.querySelector('.changesLink');
+const g=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();
+ return {w:Math.round(r.width),display:s.display,position:s.position,float:s.float,flex:s.flex};};
+console.log('fallbackHost?',!!document.querySelector('.sdp-fallbackHost'));
+console.log('ul  ',g(c.parentElement),getComputedStyle(c.parentElement).display);
+console.log('.changes',g(c)); console.log('first div',d&&g(d)); console.log('.changesLink',l&&g(l));
+```
+
+One word per line means the box is about as wide as the longest word, so the widths in that output
+locate the culprit immediately. Leading suspicion: `.changesLink` is `position:absolute; right:0.8em`
+in the base CSS and the classic-layout override may not be winning, leaving the text to wrap in the
+gap beside it. **Do not fix this from the CSS by inspection** - confirm with the numbers first.
+
+**2. Concurrency.** The last genuinely unmeasured thing. Paste on a busy deal page (thread 19049776
+has 46+ links) *before* loading, then reload:
+
+```js
+(()=>{const f=window.fetch;let inflight=0,peak=0,n=0,fail=0;const t0=performance.now();
+window.fetch=function(...a){const u=String(a[0]&&a[0].url||a[0]);
+ if(!/vano|\/26\.11\./.test(u))return f.apply(this,a);
+ n++;inflight++;peak=Math.max(peak,inflight);
+ return f.apply(this,a).then(r=>{inflight--;if(!r.ok)fail++;return r;})
+   .catch(e=>{inflight--;fail++;throw e;});};
+setTimeout(()=>{const blue=document.querySelectorAll('a.notResolved').length;
+ console.log('resolver requests:',n,'| peak concurrent:',peak,'| failed:',fail,
+  '| still unresolved:',blue,'| elapsed:',Math.round(performance.now()-t0)+'ms');},15000);})();
+```
+
+**peak concurrent** is the number that matters. `failed` above zero alongside a high peak is the
+signal that a queue is needed; if `failed` is 0 the whole item can be closed.
+
+**3. Confirm 26.11.29 and 26.11.31 in a browser.** Neither has been. 26.11.31 only adds two guards.
+26.11.29 carries the one real risk in recent releases - see §4, "the one risk worth knowing".
+
+Cache clear, needed before any resolution test:
+
+```js
+localStorage.removeItem("slickdeals+links"); location.reload();
+```
+
+---
+
+## 2a. Request cost, as it actually stands
+
+Measured over 248 resolver-bound links across every saved page:
+
+| path | links | cost |
+|---|---|---|
+| unique id, host check skipped | 32 | always 1 request |
+| no usable claim, host check skipped | 22 | always 1 request |
+| still host-checked | **194** | 1 if the answer matches the stated host, **2 if not** |
+
+So the two-request path is **not gone** - it is unreachable for 54 links and live for 194.
+
+Read that table carefully: it is a **static classification of which links could take two**, not a
+measurement that 194 took one. About twenty links were actually resolved against the live service,
+and every one of those took a single request under the current code. The other ~174 were never
+resolved live at all. Do not describe the script as "one request per link" without that
+qualification.
+
+After the first load all of them cost nothing: destinations are cached, and so now are both terminal
+failures.
+
+---
+
+## 3. Genuinely open
+
+Everything else previously listed here has been settled. All three need a browser.
 
 - **Whether `unwrapLinks` ever fires anywhere.** Across every saved page - 248 `/click` links - **not
   one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
   dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
-  evidence alone - confirm from a browser across a few page types first.
-- **Whether to unwrap from the anchor text.** *Declined for now by maxnl; kept here as the only route
-  that would resolve the meta-refresh class.* Some links show their destination as their own label.
-  Measured: 24 of 248 have URL-shaped anchor text, 15 of those are visibly truncated with an ellipsis
-  and unusable, leaving **7 that are complete and whose host matches `data-product-exitwebsite`** -
-  unwrappable with no request at all. That set includes the one link the resolver refuses (below).
-  Not built: it would point a link at its displayed URL rather than at a resolved one, which is a
-  behaviour change maxnl should decide on rather than inherit.
-- **Concurrency.** See below.
+  evidence alone.
+- **Concurrency.** See §1a for the command and §4 for what is known.
+- **The changelog panel rendering one word per line.** Open bug, see §1a. Not a resolver issue - a
+  layout one, in the menu's own CSS.
 
-*(A wiki or featured-comment block holding two same-text links is no longer on this list. It is hard
-to find in the wild, so `test/cachekey.js` now covers it with a fixture instead: two featured
-comments, a wiki block and a reply, all holding the identical URL and anchor text, asserted to key
-differently and to key stably across loads.)*
+---
 
-## 4. Open, not acted on
+## 3a. Decided - do not reopen without a reason
+
+- **Unwrapping from anchor text: declined** (maxnl, Aug 2026). 24 of 248 links have URL-shaped anchor
+  text; 15 are truncated with an ellipsis; **7** are complete with a host matching
+  `data-product-exitwebsite` and could be resolved with no request, including the one link the service
+  refuses. Declined because it would point a link at its displayed label rather than a resolved
+  destination, and those can differ. Recorded because it is the *only* route to the meta-refresh class.
+- **A wiki or featured-comment block holding two same-text links: covered by fixture, not hunted for.**
+  Hard to find in the wild, so `test/cachekey.js` builds it - two featured comments, a wiki block and
+  a reply all holding the identical URL and anchor text, asserted to key differently and stably.
+- **The resolver's address stays out of this repo.** The script assembles it at runtime from the
+  encoded string at the foot of the file. Decode that when you need it.
+- **The screenshot of the default layout is from v23.10.22** and shows fewer options than the table
+  beneath it. Left as is deliberately (maxnl, Aug 2026).
+
+## 4. Known, understood, and deliberately not acted on
 
 **A whole class the resolver cannot answer: meta-refresh interstitials.** `freetaxusa.com` in thread
 19049776's wiki (`lno=14`) is the example. The service returns a well-formed *empty* destination -
@@ -99,18 +185,16 @@ whose fallback also reaches the wrong host, is remembered. So a rate-limited lin
 keeps its own href, and is asked again on the next page load — no timer, no in-page queue, no
 week-long marker.
 
-**Two latent traps, deliberately not patched.** Neither is a live bug; both are ways a future edit
-turns into a whole-script failure, so they are written down rather than guarded, to avoid another
-change in an area that has been churned enough.
+**Both latent traps are now guarded** (26.11.31). `fixCSS()` wraps its `querySelector` in a
+try/catch returning the selector unresolved, and `highlightCards()` has the `|| []` that
+`processLinks()` always had. Neither could fire before - 44 of 44 CSS rules parse, and both selector
+lists are string literals - but both failures were total and silent, and the guards are two lines.
 
-- `fixCSS()` calls `document.body.querySelector(query)` on whatever precedes `[data-v-ID]` on a CSS
-  line, with no guard. Every current rule puts a complete selector there - checked, 44 of 44 parse -
-  but a rule that splits a selector across lines would make `querySelector` throw, and the throw
-  escapes `String.replace` and aborts `init()`. If you add `[data-v-ID]` rules, keep the whole
-  selector on one line, or wrap that call in a try/catch returning `query`.
-- `highlightCards()` uses `$$(…, true)` without the `|| []` that `processLinks()` has. `$$` swallows
-  exceptions and returns `undefined`, so an invalid selector there becomes a TypeError on
-  `nlItems.length` rather than an empty result. The selectors are static, so this cannot fire today.
+**The one risk worth knowing, from 26.11.29.** A "no destination" answer is now remembered for a
+week. Network errors and non-OK responses throw *before* that branch, so they are not cached - but if
+the service ever returned HTTP 200 with a body that decodes to a non-URL *transiently*, that link
+would go quiet for a week rather than retrying. Never observed, cannot be ruled out. Clearing the
+link cache is the escape hatch.
 
 **README screenshot of the classic-layout menu.** Requested, never done — the site resets headless
 Chromium here, so no genuine screenshot can be taken. Needs capturing by hand.

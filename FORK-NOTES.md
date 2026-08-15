@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.30** |
+| Current | **v26.11.31** |
 | Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
 | Files added | `.github/workflows/release.yml`, this file |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -89,6 +89,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.28 | — | The host check no longer runs on ids that cannot be shared, so a cross-host redirect resolves |
 | 26.11.29 | — | A "no destination" answer is remembered, instead of being re-asked on every page load |
 | 26.11.30 | — | Removes a branch 26.11.28 made unreachable, and the helper it was the only caller of |
+| 26.11.31 | — | Guards the two latent CSS traps - no behaviour change |
 
 ---
 
@@ -629,6 +630,18 @@ longer produce - which is worse than the dead code, because the comment reads as
 Found by asking of every helper "who calls this, and can that call still happen?" rather than by any
 tool. Worth repeating after any change that narrows a condition: the branch not taken may have been
 some function's only caller.
+
+**A guard is cheap when the failure is total** (26.11.31). Two spots were left unguarded for several
+releases on the reasoning that neither could fire - which was true, and checked: all 44 `[data-v-ID]`
+rules parse, and `highlightCards()`'s selector list is a string literal. The reasoning was also
+incomplete. What matters is not only *how likely* a failure is but *how bad*, and both of these fail
+the same way: `fixCSS()`'s throw escapes `String.replace` and aborts `init()`, taking the entire
+script down with no error a user would ever see, and `$$` swallowing an exception turns an empty
+result into a TypeError.
+
+Held off originally to avoid touching working code mid-churn, which was the right call at the time
+and the wrong one to leave standing. Two lines, no behaviour change, and the next person to add a CSS
+rule cannot silently kill the script.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
 before. It also resolves the rei.com post link, which the list never could - the collision and the
