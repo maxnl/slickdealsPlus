@@ -161,10 +161,12 @@ the middle, **the full destination is not recoverable locally.**
 `u2` parameter is free and entirely local; asking the service costs a request and sends the link and
 the page URL to a third party. One switch used to govern both. Now `unwrapLinks` governs
 locally-derived destinations and `resolveLinks` governs service ones, tracked per link via
-`_hrefLocal`. Local unwrapping is tried first - **but as of Aug 2026 nothing on Slickdeals carries
-`u2`, so in practice no link takes that path and every one goes to the resolver.** The separation is
-still right and the path is deliberately kept; see `MAINTAINING.md` §3a for the decision and why it
-is not dead code.
+`_hrefLocal`. **Local unwrapping is tried first and falls back to resolving when the link carries no
+`u2`** - which as of Aug 2026 is very nearly always. Across 248 saved links and a live thread page not
+one carried `u2`, so few links if any are unwrapped locally and effectively all of them reach the
+resolver. The order is still first-unwrap-then-resolve; what changed is how often the first step can
+do anything. The separation is right and the path is deliberately kept - see `MAINTAINING.md` §3a for
+the decision and why it is not dead code.
 
 **Cache management** (#7, #14, #17). Eviction on quota failure ran the iterator to exhaustion and
 then deleted `undefined`, so every pass freed nothing and recursed up to 10,000 times against an
