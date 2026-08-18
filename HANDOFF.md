@@ -85,6 +85,23 @@ ul.style.display=prev;})();
 forced-open run confirms it computes to `static`. Look instead at which *containing box* is narrow -
 one word per line means a box about as wide as the longest word.
 
+**Measured, and the culprit is isolated** (maxnl, Aug 2026, classic layout, forced-open):
+
+| element | width | verdict |
+|---|---|---|
+| `ul` | 266px, `min-width` 264px applying | fine |
+| `.changes` | 238px | fine |
+| **`.changes > div`** | **29px** | **the bug** |
+| `.changesLink` | 238px, computed `position: static` | fine |
+
+A `display:block` box inside a 238px block parent cannot be 29px in normal flow, and **no rule in this
+file constrains it** - `.changes > div` is styled in four places and none sets width, float or display.
+So something outside is. That makes this most likely the **fourth case of the class the comment above
+`.sdp-fallbackHost .sdp-menu > ul *` describes**: the panel is injected into page markup whose CSS we
+do not control, and three earlier bugs came the same way - weight, then shadow, then colour. That
+reset covers colour and typography and **does not cover width, display or float**. Widening it is the
+likely fix, but name the offending rule first.
+
 **Do not fix this from the CSS by inspection** - confirm with the numbers first.
 
 Cache clear, needed before any resolution test:
