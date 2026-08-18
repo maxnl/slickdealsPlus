@@ -54,7 +54,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.10.5 | [#17](https://github.com/maxnl/slickdealsPlus/pull/17) | Release links that have left the document |
 | 26.10.6 | [#18](https://github.com/maxnl/slickdealsPlus/pull/18) | Beat the page's ID selectors when resetting menu text |
 | 26.10.7 | [#19](https://github.com/maxnl/slickdealsPlus/pull/19) | Recognise the classic layout's deal cards |
-| 26.10.8 | [#20](https://github.com/maxnl/slickdealsPlus/pull/20) | Restore menu text colour, stop the loading counter overflowing |
+| 26.10.8 | [#20](https://github.com/maxnl/slickdealsPlus/pull/20) | Restore menu text color, stop the loading counter overflowing |
 | 26.10.9 | [#21](https://github.com/maxnl/slickdealsPlus/pull/21) | Stop breaking the resolver with hyphenated ids and nav links |
 | 26.10.10 | [#22](https://github.com/maxnl/slickdealsPlus/pull/22) | Keep the menu overlay out of the top bar's layout |
 | 26.10.11 | [#23](https://github.com/maxnl/slickdealsPlus/pull/23) | Reset inherited text properties as a category, tidy the changelog |
@@ -143,7 +143,7 @@ So a wrong destination is a **stale cache entry on the server keyed by the colli
 inability to resolve. `lno` is the link index within a post and restarts at 1 in every post, so the
 first link of *every* post in a thread is asked under `19854408sdtid1lno`, and whichever one was
 recorded first is served to all of them. Deal-body links are unaffected: they carry `pno`, so their
-ids (`1311423pno19854408sdtid3lno`) are already unique, and all seven colour variants resolve to
+ids (`1311423pno19854408sdtid3lno`) are already unique, and all seven color variants resolve to
 their own distinct ASINs.
 
 The corollary for the fork: a client-side id scheme *can* reach a correct answer, but only by
@@ -199,7 +199,7 @@ that link was the only one it was measured on.
 
 **`lno` is not an index the destination is independent of.** A deal body's variant links are
 `&lno=3&trd=Khaki`, `&lno=6&trd=Black`: `lno` is what selects the variant. Replacing it made
-Slickdeals fall back to the deal's default product, so seven colour links that each had their own
+Slickdeals fall back to the deal's default product, so seven color links that each had their own
 ASIN all resolved to one. Confirmed against the untouched originals in a browser - Khaki really goes
 to `B0GTNMT45B`, Black to `B0GTNDJ3FZ`, while every one of them was being rewritten to `B0H2CM94NK`.
 
@@ -293,7 +293,7 @@ could not discriminate between them. Every other link does: `Dark Gray` stores `
 Confirmed by scanning the thread's own markup - `trd` tracked the anchor text on all 31 links - and
 the damage was then measured rather than guessed: **228 of 287 links across 25 threads, 79%**,
 including the `Get Deal at Amazon` button and every deal image. The regression was recorded as
-"colour-variant links stopped resolving"; it was closer to all link resolution stopping. Estimating
+"color-variant links stopped resolving"; it was closer to all link resolution stopping. Estimating
 the blast radius of a bug from the one report that surfaced it is its own version of the same
 mistake.
 
@@ -302,7 +302,7 @@ that would have caught it: find the case that tells your explanation apart from 
 *that* one.
 
 **A dangerous operation can be safe in one place and not another** (26.11.15 -> 26.11.22).
-Perturbing `lno` to force an on-demand resolve is destructive in general - it rewrote seven colour
+Perturbing `lno` to force an on-demand resolve is destructive in general - it rewrote seven color
 links to the deal's default product, and 26.11.20 removed it. 26.11.22 uses it again, in one place,
 and that is not a reversal: what makes it safe is not the operation but where it runs and what is
 done with the answer.
@@ -379,7 +379,7 @@ The wider point, and the third time this file has had to make it: *proving the m
 *proving this build has the mechanism* are different claims. The first was true throughout.
 
 **Measure the thing before accepting its cost** (26.11.26). The two-request path was accepted as the
-price of keeping a deal body's colour links intact, on the belief that any unique id costs a second
+price of keeping a deal body's color links intact, on the belief that any unique id costs a second
 request. maxnl pushed back on that, and the belief did not survive contact with the service.
 
 Measured against the live resolver on thread 19854408 - curl-to-curl, which is valid for
@@ -388,7 +388,7 @@ browser:
 
 | link class | natural id | asked naturally | perturbed |
 |---|---|---|---|
-| deal body (`pno` present) | already unique per link | all 8 colours -> their own ASIN, 1 request | `lno` replaced: all collapse to `B0GTNLL1H8`. `pcoid` added: Khaki -> `B0H2CM94NK` (wrong), Black -> correct |
+| deal body (`pno` present) | already unique per link | all 8 colors -> their own ASIN, 1 request | `lno` replaced: all collapse to `B0GTNLL1H8`. `pcoid` added: Khaki -> `B0H2CM94NK` (wrong), Black -> correct |
 | post link (`lno`, no `pno`) | `<sdtid>sdtid<lno>lno`, shared by the first link of every post | rei.com link -> the thread's amazon product | `lno` replaced -> its own rei.com URL, first time |
 
 Two things fall out. **A deal body's links never needed anything** - their ids are already unique and
@@ -672,7 +672,7 @@ to a host comparison.
 dodge the id collision was measured on exactly one link, the rei.com post link, where the answer
 survived the change. That licensed treating `lno` as an index the destination does not depend on. It
 is not: a deal body's variant links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and `lno` selects the
-variant. Seven colour links each with their own ASIN all resolved to the deal's default product.
+variant. Seven color links each with their own ASIN all resolved to the deal's default product.
 
 The same mistake as 26.11.13's `trd` reading, in the same place, three days apart - and with the
 lesson from it already written in this file. Validating on one sample tells you the sample is
@@ -742,7 +742,7 @@ an `#top_userbar` prefix would break if the host were ever mounted elsewhere.
 
 **Fixtures that did not reproduce the page.** Twice a fixture lacked the page's competing ID rules,
 so a losing rule looked like a working one. Once a fixture carried the page's font-weight and
-text-shadow but not its colour, so removing `text-shadow` without reclaiming `color` produced white
+text-shadow but not its color, so removing `text-shadow` without reclaiming `color` produced white
 text on a white panel and the fixture showed nothing wrong. Fixtures now extract the real stylesheet
 from the script and measure computed values rather than being eyeballed.
 
@@ -888,7 +888,7 @@ None of these is a defect; all are known and deliberate.
 | Classic menu mounts on `window load` | Appears late on slow pages. The `document-start` call runs before any bar exists. |
 | `getUrlId` requires hostname exactly `slickdeals.net` | A `www.` variant would be skipped. Not currently served. |
 | Ad sweep: `node.parentElement.matches(...)` unguarded | Would throw on a detached node. Nodes from `querySelectorAll` and `MutationObserver` always have a parent. |
-| ~~Colour-variant deal-body links stopped resolving in 26.11.13~~ | **Fixed in 26.11.14.** Confirmed `trd` carries the anchor text; the check now reads `data-product-exitwebsite`. All 7 colour variants resolve to their own ASINs again. |
+| ~~Color-variant deal-body links stopped resolving in 26.11.13~~ | **Fixed in 26.11.14.** Confirmed `trd` carries the anchor text; the check now reads `data-product-exitwebsite`. All 7 color variants resolve to their own ASINs again. |
 | ~~`isDestinationPlausible()` rejects an affiliate hop on an unrelated domain~~ | **No longer holds a link back.** A `timex.com` link really does resolve to `www.flexoffers.com`; verified end-to-end on both id shapes, it now unwraps either by skipping the check (unique id) or by being retried and applied (shared id). Note the unwrap is of limited use on such links - the destination is itself a redirector that forwards on to the merchant. |
 | An unwrapped destination can be an affiliate redirector | `flexoffers.com`, `go.loaded.com`, `goto.walmart.com`. Unwrapping removes the Slickdeals hop, not every hop. Nothing to fix - it is the genuine destination - but it is why a `.tracked`-style badge showing the real host would be worth more than it first appears. **Do not try to resolve one of these through the service**: it derives the id from the URL submitted and requires it to match the id in the path, and a non-Slickdeals URL derives no id at all, so every such request is refused with 404 / error `7.122`. Measured on the `flexoffers.com` destination above under three different ids. `getUrlId()` returns `false` for those hostnames anyway, so the script never asks. Following the hop would mean fetching the redirect ourselves, which registers an affiliate click - see the note against the `/click` 302 in `HANDOFF.md`. |
 | ~~The REI post link does not unwrap~~ | **Fixed in 26.11.14** by the unique-id retry. Fixture thread now unwraps 13 of 13. |
