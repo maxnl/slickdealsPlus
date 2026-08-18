@@ -204,9 +204,14 @@ is a decision to take, not a question to research.
 
   What follows from it: `unwrapLinks` gates exactly one branch - `elA._hrefLocal ? SETTINGS.unwrapLinks
   : SETTINGS.resolveLinks` - and `_hrefLocal` is set only when `u2` is present. So the menu's *Unwrap
-  tracking links* checkbox currently governs nothing. **Whether to remove the setting and its branch is
-  an open decision, not an open question**; it was left in place because it costs nothing and would
-  work again if the site ever reintroduced `u2`.
+  tracking links* checkbox currently governs nothing.
+- **The unwrap path stays, unused as it is: decided, do not remove it** (maxnl, Aug 2026). It was
+  offered for removal as dead code and deliberately kept. It costs one branch and one menu row, it
+  cannot misfire while no link carries `u2`, and it starts working again by itself if the site
+  reintroduces the parameter - which is not something we would be told about, and which nothing else
+  would notice. **A future session finding this branch unreachable has found the documented state, not
+  a cleanup opportunity.** The same goes for anyone tidying the menu because a setting appears to do
+  nothing.
 - **The mobile view is out of scope** (maxnl, Aug 2026). The userscript is not used there and may not
   even be installable. 26.11.33 made the *Changes* label show while collapsed on every layout,
   including mobile, and that was deliberately not tested. Do not raise it.
