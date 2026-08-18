@@ -46,9 +46,10 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ## 1a. Start here next session
 
-**Nothing is blocked and nothing is half-finished.** The classic-layout menu work closed out in
-26.11.33; the only genuinely open question left is `unwrapLinks` in §3, which needs a link shape that
-has not been found in the wild rather than any work here.
+**Nothing is blocked, nothing is half-finished, and §3 is empty.** The classic-layout menu work
+closed out in 26.11.33 and `unwrapLinks` was settled - it is in §3a with the reasoning, not in §3.
+Before adding anything to §3, check §1b and §3a: most things that look like gaps here have already
+been decided, and the reason is recorded next to them.
 
 The reusable part of the last session was the method, not the findings:
 
