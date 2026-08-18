@@ -178,8 +178,8 @@ live number, not a count of anchors.
 
 ## 3. Genuinely open
 
-Everything here has been settled. `unwrapLinks` was the last entry and moved to §3a in Aug 2026 - it
-is a decision to take, not a question to research.
+Everything here has been settled. `unwrapLinks` was the last entry; it moved to §3a in Aug 2026 and
+the decision it was waiting on has been taken - the path stays.
 
 - *(nothing currently open)*
 
@@ -225,6 +225,11 @@ is a decision to take, not a question to research.
   including mobile, and that was deliberately not tested. Do not raise it.
 - **The screenshot of the default layout is from v23.10.22** and shows fewer options than the table
   beneath it. Left as is deliberately (maxnl, Aug 2026).
+- **`docs/classic-menu.png` predates 26.11.33 and no longer matches the menu.** It shows v26.11.27,
+  whose footer reads only `v26.11.27 · maxnl fork`; since 26.11.33 that row always carries **Changes**
+  on the left. Nothing else in it is wrong. Left as is because the site resets headless Chromium here,
+  so it can only be recaptured by hand - the same reason it had to be captured by hand originally.
+  Recapture it whenever the menu is open anyway; it is not worth a trip on its own.
 - **Both menu screenshots are in and done.** `docs/menu.png` and `docs/classic-menu.png` render side
   by side in the readme. The classic one was captured by hand by maxnl, since the site resets headless
   Chromium here - do not re-list it as outstanding.
