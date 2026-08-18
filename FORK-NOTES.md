@@ -6,9 +6,9 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.31** |
-| Diff since fork | +809 / −58 lines in `Slickdeals+.user.js` |
-| Files added | `.github/workflows/release.yml`, this file |
+| Current | **v26.11.33** |
+| Diff since fork | +1594 / −74 lines in `Slickdeals+.user.js` |
+| Files added | `.gitignore`, `.github/workflows/release.yml`, `.github/undef-check.mjs`, `MAINTAINING.md`, this file, `docs/` (2 screenshots), `test/` (5 harnesses + README) |
 | Files deleted | `CNAME`, `CHANGES.html` |
 
 Upstream has not released since 25.7.18. Its scheme is `YY.M.D` — a date. Ours is a plain
@@ -90,6 +90,8 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.29 | — | A "no destination" answer is remembered, instead of being re-asked on every page load |
 | 26.11.30 | — | Removes a branch 26.11.28 made unreachable, and the helper it was the only caller of |
 | 26.11.31 | — | Guards the two latent CSS traps - no behavior change |
+| 26.11.32 | [#70](https://github.com/maxnl/slickdealsPlus/pull/70) | **The changelog wrapped to one word per line on the classic layout** - page CSS pinned the entries to 1em |
+| 26.11.33 | [#71](https://github.com/maxnl/slickdealsPlus/pull/71) | **Clicking Changes closed the menu instead of opening the changelog**, plus the label, `more`, the panel height and washed-out comment entries |
 
 ---
 
@@ -336,7 +338,7 @@ question was the right one aimed one field over: nothing made the check *require
 hold a hostname.
 
 An absent value was handled - no claim, resolve unchecked. A value holding prose was not: `Amazon`
-normalises to `amazon`, which no real host can equal or be a subdomain of, so the link was rejected
+normalizes to `amazon`, which no real host can equal or be a subdomain of, so the link was rejected
 and, from 26.11.23, burned a retry on the way. That is 26.11.13 exactly, one attribute along, and
 the only thing standing between the script and it was that this attribute happens to hold hostnames.
 
@@ -591,7 +593,7 @@ Commission Junction hop whose `url=` parameter holds `https://www.freetaxusa.com
 is HTTP redirects, which the service follows; this one starts with a meta refresh, which is not a
 redirect at the HTTP level, so the service has nothing to follow and honestly answers "no
 destination". Retrying cannot help, and the emptiness was never staleness - a `u3` five seconds old
-behaves identically while its neighbours on the same page resolve.
+behaves identically while its neighbors on the same page resolve.
 
 So this is a whole *class*: any link Slickdeals serves as a meta-refresh interstitial is unresolvable
 through the service, however many times it is asked. The destination is sitting in that interstitial,
@@ -893,7 +895,7 @@ None of these is a defect; all are known and deliberate.
 | An unwrapped destination can be an affiliate redirector | `flexoffers.com`, `go.loaded.com`, `goto.walmart.com`. Unwrapping removes the Slickdeals hop, not every hop. Nothing to fix - it is the genuine destination - but it is why a `.tracked`-style badge showing the real host would be worth more than it first appears. **Do not try to resolve one of these through the service**: it derives the id from the URL submitted and requires it to match the id in the path, and a non-Slickdeals URL derives no id at all, so every such request is refused with 404 / error `7.122`. Measured on the `flexoffers.com` destination above under three different ids. `getUrlId()` returns `false` for those hostnames anyway, so the script never asks. Following the hop would mean fetching the redirect ourselves, which registers an affiliate click - see the note against the `/click` 302 in `MAINTAINING.md`. |
 | ~~The REI post link does not unwrap~~ | **Fixed in 26.11.14** by the unique-id retry. Fixture thread now unwraps 13 of 13. |
 | Quick View links resolve correctly | Confirmed in a browser: expanding a listing card shows links blue then green moments later, i.e. injected markup is picked up by the MutationObserver, processed and unwrapped. This path cannot be sampled offline - listing pages carry no `/click` links until a card is expanded - so the browser check is the only evidence there is, and it is positive. |
-| No cached destination is re-checked, for any link | **Links are cached exactly as before** - first load resolves and stores, later loads are cache hits with no request. What no longer happens, since 26.11.18, is the plausibility check re-running on the way *out* of the cache. It is unnecessary: everything in the cache was written by current logic, either passing the check when it arrived or coming from an id unique to that link, and legacy entries were dropped once on the way in to 26.11.16. It was also actively harmful - see [issues we hit](#issues-we-hit) for the every-page-load loop it caused. The residual is that a wrong answer, if the service ever gave one to a checked or unique lookup, would persist until the 5000-entry cap evicted it. Symptom: one link resolving somewhere wrong and staying wrong across reloads while its neighbours are fine. Remedy: `localStorage.removeItem("slickdeals+links")`. A TTL would close it properly if it ever bites — one exists for *failures* since 26.11.29 (`RESOLVE_RETRY_AFTER`, one week); extending it to successful destinations would be the fix. |
+| No cached destination is re-checked, for any link | **Links are cached exactly as before** - first load resolves and stores, later loads are cache hits with no request. What no longer happens, since 26.11.18, is the plausibility check re-running on the way *out* of the cache. It is unnecessary: everything in the cache was written by current logic, either passing the check when it arrived or coming from an id unique to that link, and legacy entries were dropped once on the way in to 26.11.16. It was also actively harmful - see [issues we hit](#issues-we-hit) for the every-page-load loop it caused. The residual is that a wrong answer, if the service ever gave one to a checked or unique lookup, would persist until the 5000-entry cap evicted it. Symptom: one link resolving somewhere wrong and staying wrong across reloads while its neighbors are fine. Remedy: `localStorage.removeItem("slickdeals+links")`. A TTL would close it properly if it ever bites — one exists for *failures* since 26.11.29 (`RESOLVE_RETRY_AFTER`, one week); extending it to successful destinations would be the fix. |
 | ~~The resolver is asked with unbounded concurrency~~ | **Measured in a browser, and it is fine.** Thread 19049776 on a cold cache at 26.11.31: **35 requests, peak 35 concurrent, 0 failed**. Peak equalling the total confirms the no-queue reading exactly - all 35 went out in one burst - and the service served every one. The "roughly 4 at a time" figure came from separate curl connections; a browser multiplexes over one HTTP/2 connection and does not trip it. **No queue is needed, and none should be added without a fresh measurement showing failures.** The command is in `MAINTAINING.md` §1a. |
 | ~~`fixCSS()` and `highlightCards()` could be killed by one bad CSS selector~~ | **Guarded in 26.11.31.** `fixCSS()` wraps its `querySelector` in a try/catch returning the selector unresolved; `highlightCards()` has the `\|\| []` that `processLinks()` always had. Neither could fire - 44 of 44 rules parse and both selector lists are literals - but both failed totally and silently. |
 | `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |

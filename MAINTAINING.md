@@ -242,22 +242,21 @@ gap, because the reason is usually the thing you were about to rediscover.
 - **The mobile view is out of scope, and that is a decision** (maxnl, Aug 2026). The userscript is not used there and may not
   even be installable. 26.11.33 made the *Changes* label show while collapsed on every layout,
   including mobile, and that was deliberately not tested. Do not raise it.
-- **The screenshot of the default layout showing fewer options than the table: left as is**
-  (maxnl, Aug 2026). See the entry above for why it cannot simply be edited.
-- **`docs/classic-menu.png` was edited, not recaptured** (Aug 2026). It was taken at v26.11.27, before
-  26.11.33 made the **Changes** label show while collapsed, so its footer read as a bare version. The
-  footer row was redrawn to read `Changes … v26.11.33 · maxnl fork`. Both changes were verifiable -
-  maxnl had confirmed the label in a browser and the version is a fact - so nothing depicted is
-  invented. **The rest of the image is the original capture.** Say so if it is ever revised again;
-  an edited screenshot that is mistaken for a capture is a trap.
-- **`docs/menu.png` is from v23.10.22 and cannot be fixed the same way.** It is the Blueprint layout
-  and is missing four rows the menu now has - *Unwrap tracking links*, *Price first*, *Hide Side
-  Column*, *Debug* - plus the footer label. Editing those in would mean **inventing** a UI nobody has
-  a current screenshot of, which is not the same as correcting two known strings. It needs a real
-  capture on the default layout, by hand, since the site resets headless Chromium here.
-- **Both menu screenshots are in and done.** `docs/menu.png` and `docs/classic-menu.png` render side
-  by side in the readme. The classic one was captured by hand by maxnl, since the site resets headless
-  Chromium here - do not re-list it as outstanding.
+- **The two menu screenshots, and what is true of each.** Both are in the readme and neither is
+  outstanding as an *addition* - do not re-list them as missing.
+  - `docs/classic-menu.png` is current, but it was **edited, not recaptured** (Aug 2026). It was taken
+    at v26.11.27, before 26.11.33 made the **Changes** label show while collapsed, so its footer read
+    as a bare version. The footer row was redrawn to read `Changes … v26.11.33 · maxnl fork`. Both
+    changes were verifiable - maxnl had confirmed the label in a browser and the version is a fact -
+    so nothing depicted is invented, and **the rest of the image is the original capture.** Say so if
+    it is ever revised again; an edited screenshot mistaken for a capture is a trap.
+  - `docs/menu.png` is from v23.10.22 and **is genuinely stale**: it is the Blueprint layout and is
+    missing four rows the menu now has - *Unwrap tracking links*, *Price first*, *Hide Side Column*,
+    *Debug* - plus the footer label. It cannot be fixed the way the classic one was, because editing
+    four rows in would mean **inventing** a UI nobody has a current screenshot of, which is not the
+    same act as correcting two known strings. Replacing it needs a real capture on the default layout,
+    by hand, since the site resets headless Chromium here. maxnl has left it deliberately and the
+    readme carries a line saying it shows fewer options than the table, so no reader is misled.
 
 ## 4. Known, understood, and deliberately not acted on
 
@@ -265,7 +264,7 @@ gap, because the reason is usually the thing you were about to rediscover.
 19049776's wiki (`lno=14`) is the example. The service returns a well-formed *empty* destination -
 a few bytes unmasking to `""` - under the natural id and the perturbed one, with a `curl`-derived
 `u3`, with the real `u3` from a signed-in browser, and with a `u3` five seconds old while its
-neighbours on the same page resolve normally. Staleness is ruled out.
+neighbors on the same page resolve normally. Staleness is ruled out.
 
 The cause: that `/click` URL answers **HTTP 200 with an HTML interstitial**, not a 302. It carries a
 `<meta http-equiv="refresh">` to a Commission Junction hop whose `url=` parameter holds the real
