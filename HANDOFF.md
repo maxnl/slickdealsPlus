@@ -185,13 +185,25 @@ the decision it was waiting on has been taken - the path stays.
 
 ---
 
-## 3a. Decided - do not reopen without a reason
+## 3a. Decided - closed, not shelved
 
-- **Unwrapping from anchor text: declined** (maxnl, Aug 2026). 24 of 248 links have URL-shaped anchor
-  text; 15 are truncated with an ellipsis; **7** are complete with a host matching
+**These are settled, not paused.** Every entry here was decided by maxnl with reasons recorded
+alongside it. Listing them back as "worth revisiting" or "open to revisit" is the same mistake as
+re-raising finished work from §1b, and it has happened - re-read the reason before you imagine a
+gap, because the reason is usually the thing you were about to rediscover.
+
+- **Unwrapping from anchor text: declined, permanently** (maxnl, Aug 2026). 24 of 248 links have
+  URL-shaped anchor text; 15 are truncated with an ellipsis; **7** are complete with a host matching
   `data-product-exitwebsite` and could be resolved with no request, including the one link the service
-  refuses. Declined because it would point a link at its displayed label rather than a resolved
-  destination, and those can differ. Recorded because it is the *only* route to the meta-refresh class.
+  refuses.
+
+  The reason, in maxnl's terms: **the anchor text is not reliably the intended destination, and the
+  href must not be overridden with it when it is not.** There are various ways the two can come apart,
+  and the host matching narrows that without closing it. A cheap resolution that sometimes sends
+  someone to the wrong place is worse than an unresolved link that still works.
+
+  That it is the only route to the meta-refresh class does not reopen it - that was known when the
+  call was made. **Do not re-propose this as a way to fix `freetaxusa.com`.**
 - **A wiki or featured-comment block holding two same-text links: covered by fixture, not hunted for.**
   Hard to find in the wild, so `test/cachekey.js` builds it - two featured comments, a wiki block and
   a reply all holding the identical URL and anchor text, asserted to key differently and stably.
@@ -220,16 +232,22 @@ the decision it was waiting on has been taken - the path stays.
   nothing else in the script would notice. **A future session finding this branch never taken has
   found the documented state, not a cleanup opportunity.** The same goes for anyone tidying the menu
   because a setting appears to do nothing.
-- **The mobile view is out of scope** (maxnl, Aug 2026). The userscript is not used there and may not
+- **The mobile view is out of scope, and that is a decision** (maxnl, Aug 2026). The userscript is not used there and may not
   even be installable. 26.11.33 made the *Changes* label show while collapsed on every layout,
   including mobile, and that was deliberately not tested. Do not raise it.
-- **The screenshot of the default layout is from v23.10.22** and shows fewer options than the table
-  beneath it. Left as is deliberately (maxnl, Aug 2026).
-- **`docs/classic-menu.png` predates 26.11.33 and no longer matches the menu.** It shows v26.11.27,
-  whose footer reads only `v26.11.27 · maxnl fork`; since 26.11.33 that row always carries **Changes**
-  on the left. Nothing else in it is wrong. Left as is because the site resets headless Chromium here,
-  so it can only be recaptured by hand - the same reason it had to be captured by hand originally.
-  Recapture it whenever the menu is open anyway; it is not worth a trip on its own.
+- **The screenshot of the default layout showing fewer options than the table: left as is**
+  (maxnl, Aug 2026). See the entry above for why it cannot simply be edited.
+- **`docs/classic-menu.png` was edited, not recaptured** (Aug 2026). It was taken at v26.11.27, before
+  26.11.33 made the **Changes** label show while collapsed, so its footer read as a bare version. The
+  footer row was redrawn to read `Changes … v26.11.33 · maxnl fork`. Both changes were verifiable -
+  maxnl had confirmed the label in a browser and the version is a fact - so nothing depicted is
+  invented. **The rest of the image is the original capture.** Say so if it is ever revised again;
+  an edited screenshot that is mistaken for a capture is a trap.
+- **`docs/menu.png` is from v23.10.22 and cannot be fixed the same way.** It is the Blueprint layout
+  and is missing four rows the menu now has - *Unwrap tracking links*, *Price first*, *Hide Side
+  Column*, *Debug* - plus the footer label. Editing those in would mean **inventing** a UI nobody has
+  a current screenshot of, which is not the same as correcting two known strings. It needs a real
+  capture on the default layout, by hand, since the site resets headless Chromium here.
 - **Both menu screenshots are in and done.** `docs/menu.png` and `docs/classic-menu.png` render side
   by side in the readme. The classic one was captured by hand by maxnl, since the site resets headless
   Chromium here - do not re-list it as outstanding.
