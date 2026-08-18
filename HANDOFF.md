@@ -13,9 +13,11 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.31**, confirmed in a browser for the Amazon variants, the rei.com
-link, the Timex links, a wiki thread, a multi-post thread and a thread whose wiki links state a host
-they do not end on.
+Released and current: **v26.11.31**.
+
+**What has and has not been confirmed in a browser matters here.** Everything through **26.11.28** was
+checked by maxnl on real threads. **26.11.29 and 26.11.31 have not been.** Do not read the list below
+as covering them.
 
 | version | state |
 | --- | --- |
@@ -28,9 +30,9 @@ they do not end on.
 | 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
 | 26.11.31 | **current** - guards the two latent CSS traps; no behaviour change |
 
-Confirmed working in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com
-post link resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21
-of thread 19854408 resolve to three different destinations.
+Confirmed in a browser, at 26.11.28 or earlier: all eight Amazon colour variants keep their own
+ASINs, the rei.com post link resolves, both Timex links resolve, the wiki block resolves, and the
+three links in post 21 of thread 19854408 resolve to three different destinations.
 
 **Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
 is remembered as failed for a week:
@@ -92,6 +94,34 @@ Cache clear, needed before any resolution test:
 ```js
 localStorage.removeItem("slickdeals+links"); location.reload();
 ```
+
+---
+
+## 1b. Already done - do not re-raise
+
+This list exists because a second assistant, reading these notes cold, proposed work that was already
+finished. If something looks like a loose end and is on this list, it is not.
+
+| | |
+|---|---|
+| The 26.11.13 regression (colour variants, then 4 links in 5) | Fixed in 26.11.14 |
+| Hardcoded affiliate-network lists | Removed in 26.11.23; the rule is generic and must stay that way |
+| A call to a function deleted in the same commit | Fixed in 26.11.25, plus a `no-undef` release gate |
+| The deal button and image re-requesting on every page load | Fixed in 26.11.26 (`pv`/`au` stripped from the cache key) |
+| Post links costing two requests | Fixed in 26.11.26; they are asked under a unique id from the start |
+| Links stating `slickdeals.net` never unwrapping | Fixed in 26.11.27 |
+| Wiki and featured-comment links sharing cache keys | Fixed in 26.11.27 |
+| A cross-host redirect being rejected | Fixed in 26.11.28 |
+| A "no destination" answer re-asked every load | Fixed in 26.11.29 |
+| Dead code left by 26.11.28 (`resolveNatural`) | Removed in 26.11.30 |
+| `fixCSS()` / `highlightCards()` latent traps | Guarded in 26.11.31 |
+| README screenshot of the menu | **Done** - `docs/classic-menu.png` and `docs/menu.png`, both in the README |
+| Documenting the menu options for users | **Done** - the options table in the README |
+| The resolver hostname appearing in plain text | **Done** - removed from every tracked file |
+| Stale claude/* branches | **Done** - deleted by maxnl |
+
+The same applies to `FORK-NOTES.md`: its *Outstanding items* table keeps finished rows struck
+through for the history. Struck through means finished.
 
 ---
 
@@ -175,7 +205,7 @@ on the first load after any change in this area.
 
 **Unbounded concurrency.** `processLinks()` fires every request with no queue. Measured over curl the
 service serves ~4 at a time; a browser multiplexes over one HTTP/2 connection and may not trip it at
-all. Deliberately not acted on — measure from a browser first.
+all. Deliberately not acted on — measure from a browser first, with the command in §1a.
 
 Failure is graceful, and this was re-checked when the negative cache went in. A rate-limited or failed
 request never reaches the branch that records a failure: `resolveUrl()` catches network errors to
@@ -195,9 +225,6 @@ week. Network errors and non-OK responses throw *before* that branch, so they ar
 the service ever returned HTTP 200 with a body that decodes to a non-URL *transiently*, that link
 would go quiet for a week rather than retrying. Never observed, cannot be ruled out. Clearing the
 link cache is the escape hatch.
-
-**README screenshot of the classic-layout menu.** Requested, never done — the site resets headless
-Chromium here, so no genuine screenshot can be taken. Needs capturing by hand.
 
 ---
 
