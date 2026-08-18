@@ -117,9 +117,22 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | Documenting the menu options for users | **Done** - the options table in the README |
 | The resolver hostname appearing in plain text | **Done** - removed from every tracked file |
 | Stale claude/* branches | **Done** - deleted by maxnl |
+| `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
 
 The same applies to `FORK-NOTES.md`: its *Outstanding items* table keeps finished rows struck
 through for the history. Struck through means finished.
+
+**On the `node_modules` row, since the obvious follow-up is "shouldn't we purge it from history?" -
+no, and that is measured.** The pre-ship `npm install --no-save eslint globals` in §5 writes
+`node_modules` into the working tree, and a `git add -A` committed it: 1114 files, 13MB, 98% of the
+repo. It is untracked now and `.gitignore` stops a recurrence. The blobs remain in history, and a
+fresh clone over the wire costs **2.9 MiB packed** against a 464 KB working tree - so they add about
+2.5 MB, once, and compress well. Rewriting `master` would break every existing clone to recover less
+than the two screenshots weigh.
+
+Measure this correctly if it is ever revisited: a local `git clone` of this repo reports ~9 MB
+because it hardlinks loose objects instead of repacking, and `du -sh .git` is misleading for the same
+reason. Use `git clone --no-local`, or `git count-objects -vH` on a fresh clone.
 
 ---
 
