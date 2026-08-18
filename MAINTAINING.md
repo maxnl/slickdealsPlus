@@ -119,8 +119,9 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | Stale claude/* branches | **Done** - deleted by maxnl |
 | `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
 
-The same applies to `FORK-NOTES.md`: its *Outstanding items* table keeps finished rows struck
-through for the history. Struck through means finished.
+The same applies to `FORK-NOTES.md`: its *Known characteristics and accepted limitations* table keeps
+finished rows struck through for the history. Struck through means finished, and nothing in that
+table is open work - it is that file's counterpart to §4 below, not to §3.
 
 **On the `node_modules` row, since the obvious follow-up is "shouldn't we purge it from history?" -
 no, and that is measured.** The pre-ship `npm install --no-save eslint globals` in §5 writes
