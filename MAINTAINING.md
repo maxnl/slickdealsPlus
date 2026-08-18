@@ -119,8 +119,9 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | Stale claude/* branches | **Done** - deleted by maxnl |
 | `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
 
-The same applies to `FORK-NOTES.md`: its *Outstanding items* table keeps finished rows struck
-through for the history. Struck through means finished.
+The same applies to `FORK-NOTES.md`: its *Known characteristics and accepted limitations* table keeps
+finished rows struck through for the history. Struck through means finished, and nothing in that
+table is open work - it is that file's counterpart to §4 below, not to §3.
 
 **On the `node_modules` row, since the obvious follow-up is "shouldn't we purge it from history?" -
 no, and that is measured.** The pre-ship `npm install --no-save eslint globals` in §5 writes
@@ -347,6 +348,11 @@ sed -n '/^})(`/,$p' 'Slickdeals+.user.js' | grep -c '`\|\${'      # must print 2
 node test/unit.js && node test/cachekey.js && node test/answers.js && node test/stability.js
 ```
 
+- **A green run says nothing about the menu, the CSS, card processing or ad blocking.** The harnesses
+  extract ten resolver-side functions and touch none of that - there is no DOM here. Both 26.11.32
+  and 26.11.33 were menu fixes, and every gate above passed on the broken builds; a browser caught
+  them. Anything outside link resolution is unverified until someone loads a page. See
+  `test/README.md`.
 - `@version` and `const VERSION` must agree, or the release workflow fails. `VERSION` is also a path
   segment in the resolver URL: bump it, never change its shape.
 - **A harness must call the shipped function, not a copy of it.** The 26.11.23 suite re-implemented
