@@ -31,7 +31,7 @@ rewritten - see the note there for why.
 | 26.11.28 | good, superseded - the host check runs only on ids that can be shared |
 | 26.11.29 | good, superseded - a "no destination" answer is remembered instead of re-asked every load |
 | 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
-| 26.11.31 | good, superseded - guards the two latent CSS traps; no behaviour change |
+| 26.11.31 | good, superseded - guards the two latent CSS traps; no behavior change |
 | 26.11.32 | good, superseded - the changelog no longer wraps to one word per line |
 | 26.11.33 | **current** - the Changes toggle works on the classic layout, and four faults around it |
 
