@@ -44,39 +44,46 @@ One thing is waiting. It needs a browser; it cannot be done from a container.
 layout at 26.11.30. The changelog block under **Changes** wraps every word onto its own line, and
 `more` sits beside the text instead of below it.
 
-**Two traps to know before measuring, both of which cost a round here.**
+**A second bug was found while trying to measure the first, and it blocks the measurement.**
+*Clicking the footer closes the menu on the classic layout.* The footer reading `v<VERSION> · <FORK>`
+is a `<label for="sdpChanges">`, and `#sdpChanges` sits in the `display:none` group near the top of
+the CSS. **A `display:none` input cannot take focus**, so the browser's label-activation moves focus
+out of the menu; the classic panel is held open only by `.sdp-fallbackHost .sdp-menu:focus-within >
+ul`, so it collapses at the moment Changes is expanded. The checkbox itself still toggles - measured,
+`.changes` computes to `display: block` - but its `ul` is `display: none` by then, so every width
+reads 0. Any diagnostic that asks a human to click Changes and then measure will report zeros. Two
+runs were lost to this.
 
-*The panel is focus-gated.* `.sdp-fallbackHost .sdp-menu:focus-within > ul` is the only rule that
-gives that `ul` `display: block`, so clicking into the devtools console closes the menu. A snippet
-typed at the console prompt measures a hidden element and returns zeros for every width. The
-diagnostic below therefore runs on a timer, and nothing may be clicked while it waits.
+Worth fixing on its own account: on this layout the changelog cannot be read at all by clicking.
 
-*The Changes block is not version-gated.* It is built unconditionally at `initMenu()` - the footer
-reading `v<VERSION> · <FORK>` is a `<label for="sdpChanges">`, and clicking it toggles the checkbox
-that `#sdpChanges:checked ~ .changes` reveals. No downgrade is needed to see it; the footer line is
-the toggle, and it is easy to mistake for a static version label.
+*Measure by forcing the panel open instead of focusing it*, which is what the snippet below does -
+it sets the checkbox, forces the `ul` to `display:block` inline, measures, and restores. No clicking,
+so focus never matters:
+
+```js
+(()=>{const menu=document.querySelector(".sdp-menu"),c=document.querySelector(".changes");
+if(!menu||!c){console.log("menu or .changes missing");return;}
+const ul=c.parentElement,cb=document.getElementById("sdpChanges");
+if(cb)cb.checked=true;
+const prev=ul.style.display; ul.style.display="block";
+const g=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();
+ return {w:Math.round(r.width),display:s.display,position:s.position,whiteSpace:s.whiteSpace};};
+const d=c.querySelector("div"),l=document.querySelector(".changesLink");
+console.log("fallbackHost?",!!document.querySelector(".sdp-fallbackHost"));
+console.log("ul          ",g(ul),"minWidth",getComputedStyle(ul).minWidth);
+console.log(".changes    ",g(c));
+console.log("first div   ",d&&g(d));
+console.log(".changesLink",l&&g(l));
+console.log("menu box    ",Math.round(menu.getBoundingClientRect().width),
+ "parent",menu.parentElement&&menu.parentElement.className);
+ul.style.display=prev;})();
+```
 
 *And the suspicion recorded here previously was wrong.* It read that `.changesLink` keeps its base
 `position:absolute` because the classic override loses. It does not lose:
-`.sdp-fallbackHost .changesLink { position: static }` is two classes and later in the file, so it
-wins wherever `.sdp-fallbackHost` is an ancestor. Look instead at whether the *containing* box is
-narrow - one word per line means a box about as wide as the longest word.
-
-Paste this, then click the Slickdeals+ button and the footer line, and touch nothing else:
-
-```js
-(()=>{console.log("8 seconds: open the SD+ menu, click the v… footer line, then DO NOT click anything");
-setTimeout(()=>{const cb=document.getElementById("sdpChanges"); if(cb) cb.checked=true;
- const c=document.querySelector(".changes");
- if(!c){console.log("no .changes - menu never mounted");return;}
- const ul=c.parentElement,d=c.querySelector("div"),l=document.querySelector(".changesLink");
- const g=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();
-  return {w:Math.round(r.width),display:s.display,position:s.position,float:s.float,flex:s.flex};};
- console.log("fallbackHost?",!!document.querySelector(".sdp-fallbackHost"));
- console.log("ul display  ",getComputedStyle(ul).display,"(none = menu lost focus, rerun)");
- console.log("ul          ",g(ul)); console.log(".changes    ",g(c));
- console.log("first div   ",d&&g(d)); console.log(".changesLink",l&&g(l));},8000);})();
-```
+`.sdp-fallbackHost .changesLink { position: static }` is two classes and later in the file, and a
+forced-open run confirms it computes to `static`. Look instead at which *containing box* is narrow -
+one word per line means a box about as wide as the longest word.
 
 **Do not fix this from the CSS by inspection** - confirm with the numbers first.
 
@@ -190,6 +197,10 @@ Everything else previously listed here has been settled. Both need a browser.
   evidence alone.
 - **The changelog panel rendering one word per line.** Open bug, see §1a. Not a resolver issue - a
   layout one, in the menu's own CSS.
+- **Clicking the footer closes the classic-layout menu**, so the changelog cannot be read there at
+  all. Found while trying to measure the item above, and it blocks that measurement. Cause is known
+  and written up in §1a: a `display:none` checkbox cannot take focus, and the panel is held open by
+  `:focus-within`. Fixing it is not the same job as the wrapping bug, though one fix may serve both.
 
 ---
 
