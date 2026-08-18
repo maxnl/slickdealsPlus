@@ -547,9 +547,10 @@ session, not just `u3`. Markup, not only destinations, has to be confirmed from 
 not resolve. Probing the live service told them apart at once, and only one was ours:
 
 - `freetaxusa.com` - the service answers nothing usable, on the natural id and the perturbed one, on
-  repeated tries. A resolver-side dead end. The link keeps its href, still works, is never cached as
-  a failure (an empty answer is thrown out before the branch that records one) and is asked again on
-  the next load. Nothing to fix here.
+  repeated tries. A resolver-side dead end. The link keeps its href and still works. *At 26.11.28* it
+  was never cached as a failure - an empty answer was thrown out before the branch that records one -
+  so it was re-asked on every load; **26.11.29 changed that**, and the answer is now remembered for a
+  week like any other recorded failure. Nothing to fix here.
 - `irs.treasury.gov/freetaxprep/` states `treasury.gov` and the service answers `https://www.irs.gov/`
   - which is correct; that URL really does redirect across hosts. The host check rejected it.
 
