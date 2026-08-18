@@ -1,8 +1,14 @@
-# Handoff — link resolution
+# Maintaining Slickdeals+
 
-State as of **v26.11.31**. Read with [`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable
-architecture notes and the full history of what was tried and why it failed. This file holds only
-what a new session needs to pick the work up.
+**Read this before changing anything.** It carries what is decided, what is finished, what must be
+run before shipping, and the environment facts that cost hours to rediscover. Read it with
+[`FORK-NOTES.md`](FORK-NOTES.md), which holds the durable architecture notes and the full history of
+what was tried and why it failed.
+
+It was called `HANDOFF.md` while there was work in flight to hand over. There is not any more, and
+the name was doing the file a disservice: §5 is a mandatory pre-ship checklist, not notes, and §1b
+and §3a exist to stop finished work being raised again - which has happened more than once, in both
+directions, by humans and assistants alike.
 
 The authoritative statement of the rules now lives **in the code**: a header block above
 `resolveUrl()` in `Slickdeals+.user.js` lists the six load-bearing constraints and why each cannot
