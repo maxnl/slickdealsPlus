@@ -9,7 +9,7 @@ const cases = [
 	// [stated host, resolved url, expected, why]
 	["rei.com",     "https://www.amazon.com/gp/product/B0GTNLL1H8/ref=x", false, "THE BUG: REI post link answered with the deal's amazon page"],
 	["rei.com",     "https://www.rei.com/learn/expert-advice/sun-protection.html?ircl=1", true, "REI link, correct answer"],
-	["amazon.com",  "https://www.amazon.com/gp/product/B0GTNMT45B?tag=slickdeals09-20", true, "Khaki colour variant"],
+	["amazon.com",  "https://www.amazon.com/gp/product/B0GTNMT45B?tag=slickdeals09-20", true, "Khaki color variant"],
 	["amazon.com",  "https://www.amazon.com/dp/B0DRW63X1Z?creative=9325", true, "deal image, /dp/ form"],
 	["amazon.com",  "https://www.amazon.com:443/amazonprime?primeCampaignId=x", true, "explicit port"],
 	["loaded.com",  "https://go.loaded.com/c/10451/1675318/18216?subid1=x", true, "affiliate hop on a subdomain"],

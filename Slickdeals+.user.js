@@ -77,7 +77,7 @@ const SETTINGS = (() =>
 	 * evicting those instead would be strictly worse. True LRU, keeping the most
 	 * recently *used*, would cost a delete+set on every cache read and only
 	 * changes which entries survive once the cap is hit. At 566 observed against
-	 * 5000 it is not hit, so LRU would be optimising a branch that does not run.
+	 * 5000 it is not hit, so LRU would be optimizing a branch that does not run.
 	 * It is also not free of hazard: reads are currently pure, and reordering on
 	 * read would mutate the Map while eviction and settingsSave() iterate it.
 	 * Revisit only if the cap starts being reached. */
@@ -1063,7 +1063,7 @@ const noAds = (() =>
 				 * was always undefined and images were never swept here. That is the
 				 * gap the innerHTML text-filter gate opens: a tracking pixel injected
 				 * as markup is no longer caught by blockText, and this sweep - the
-				 * remaining line of defence - skipped every img. Images carry the URL
+				 * remaining line of defense - skipped every img. Images carry the URL
 				 * on `src`; link elements still use `href`. */
 				const url = node.src || node.href;
 				if (url && isAds(url))
@@ -2675,7 +2675,7 @@ const getCacheKey = (() =>
  * port removed, for comparing one against another.
  * @function
  * @param {string} value - A URL or a bare hostname.
- * @returns {string} the host, normalised
+ * @returns {string} the host, normalized
  */
 const hostOf = value => ("" + value).toLowerCase()
 	.replace(/^[a-z\d+.-]+:\/\//, "")
@@ -2697,7 +2697,7 @@ const hostOf = value => ("" + value).toLowerCase()
  * to. It exists to stop prose being read as a destination claim, which is the
  * failure that actually happened; the residual is narrower than what it fixes
  * and fails the same safe way - the link is left alone, still working.
- * @param {string} value - an already-normalised host, as returned by hostOf().
+ * @param {string} value - an already-normalized host, as returned by hostOf().
  * @returns {boolean} true if the value can be believed as a hostname.
  */
 const isHostShaped = value => /^[a-z\d-]+(?:\.[a-z\d-]+)*\.[a-z]{2,}$/.test(value);
@@ -3574,7 +3574,7 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem
 
 .changes .help::before
 {
-	color: grey;
+	color: gray;
 	content: "?";
 }
 
@@ -3653,7 +3653,7 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff :is(div.dealitem
 {
 	width: 7em;
 	height: 2.86em;
-	border: 1px solid grey;
+	border: 1px solid gray;
 	cursor: wait;
 	font-size: 0.7em;
 	font-style: italic;

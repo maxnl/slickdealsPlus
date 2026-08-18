@@ -1,0 +1,8 @@
+# The pre-ship undef-check installs eslint with `npm install --no-save`, which
+# still writes node_modules into the working tree. It was committed once that
+# way - 1114 files, 13MB, 98% of the repo - so this is not hypothetical.
+node_modules/
+package-lock.json
+
+# Scratch output from probes and harness runs
+*.log
