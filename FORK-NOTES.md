@@ -881,8 +881,12 @@ of them is a layout the script is silently inert on.
   `[data-v-ID]` selectors by matching `/^v([A-F]|-\d)/`.
 - **`datasets` is a Proxy** that writes to every registered dataset but reads only the first, and
   dataset values are strings.
-- **localStorage keys are string literals** (`"slickdeals+"`, `"slickdeals+links"`), independent of
-  script identity — renaming the script cannot orphan settings or the cache.
+- **localStorage keys are hardcoded, not derived from script identity** - renaming the script cannot
+  orphan settings or the cache. Only the first is a literal: `LocalStorageName = "slickdeals+"`, and
+  `LocalStorageNameLinks = LocalStorageName + "links"`. **Grepping the file for `"slickdeals+links"`
+  therefore finds nothing**, which looks alarming the first time, because the escape hatch handed to
+  users everywhere in these notes is `localStorage.removeItem("slickdeals+links")`. That key is right;
+  it is just assembled one line below the one you will find.
 - **A threshold of 0 switches its feature off.** `SETTINGS.highlightRating && …` — `0 &&` is falsy,
   so score and price-difference highlighting do nothing until set above zero. This is not a bug, but
   it looks exactly like one.
