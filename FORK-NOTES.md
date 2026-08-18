@@ -926,18 +926,19 @@ Confirmed at the same time: the full destination is **not** recoverable from the
 `rei.com` URL in the post's markup is the abridged link *text*
 (`https://www.rei.com/learn/expert-...ction.html`), so the resolver remains the only source.
 
-**Cap the resolver's concurrency.** `processLinks()` fires `resolveUrl()` for every link in its loop
-with no `await` and no queue, so a thread with 47 resolvable links opens 47 simultaneous requests.
-The service does not serve them: measured over separate connections, 12 requests at concurrency 1
-all succeeded, while 8 or more in flight lost two thirds. Sequentially 30 requests at 200ms spacing
-lost 2. So the constraint is concurrency, not volume, and a small queue (4 in flight, say) would
-resolve every link on a page rather than most of them.
+**~~Cap the resolver's concurrency.~~ Measured from a browser - not needed.** `processLinks()` fires
+`resolveUrl()` for every link with no `await` and no queue, and the case for a queue rested on curl
+numbers: 12 requests at concurrency 1 all succeeded, while 8 or more in flight lost two thirds. This
+entry already said to confirm against a real page before adding machinery, and that is what settled
+it.
 
-**Measure this from a browser before acting on it.** The numbers above come from separate `curl`
-processes, each with its own TLS handshake, from a datacenter IP with no session cookies. A browser
-issues the same requests as multiplexed streams over a single HTTP/2 connection, which may not trip
-the limit at all — and if it did trip it this badly, unresolved links would be the norm rather than
-the exception. Confirm against a real page before adding machinery for it.
+Measured by maxnl in a browser on thread 19049776, cold cache, 26.11.31: **35 requests, peak 35
+concurrent, 0 failed.** Peak equalling the total means all 35 went out in one burst - exactly the
+no-queue behavior this entry worried about - and the service served every one. The curl numbers came
+from separate processes, each with its own TLS handshake, from a datacenter IP with no session
+cookies; a browser issues them as multiplexed streams over a single HTTP/2 connection and does not
+trip the limit. **Do not add a queue**, and see `MAINTAINING.md` §4, which records the same result and
+says the same thing.
 
 **Local price history.** Store `{dealId: [{price, date}]}` alongside the link cache and flag a card
 when the same item was posted cheaper before. Entirely local. "Is this actually a good price" is the
@@ -959,6 +960,6 @@ just reorder on a value that exists.
 
 ## Licensing
 
-Upstream is MIT. This fork keeps the licence, retains V@no's attribution in `@author`
+Upstream is MIT. This fork keeps the license, retains V@no's attribution in `@author`
 (`maxnl (fork of Slickdeals+ by V@no)`), and links back to the upstream repository from the README.
 `@namespace` is unchanged. None of this is intended for upstreaming.
