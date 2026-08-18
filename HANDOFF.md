@@ -205,13 +205,21 @@ is a decision to take, not a question to research.
   What follows from it: `unwrapLinks` gates exactly one branch - `elA._hrefLocal ? SETTINGS.unwrapLinks
   : SETTINGS.resolveLinks` - and `_hrefLocal` is set only when `u2` is present. So the menu's *Unwrap
   tracking links* checkbox currently governs nothing.
-- **The unwrap path stays, unused as it is: decided, do not remove it** (maxnl, Aug 2026). It was
-  offered for removal as dead code and deliberately kept. It costs one branch and one menu row, it
-  cannot misfire while no link carries `u2`, and it starts working again by itself if the site
-  reintroduces the parameter - which is not something we would be told about, and which nothing else
-  would notice. **A future session finding this branch unreachable has found the documented state, not
-  a cleanup opportunity.** The same goes for anyone tidying the menu because a setting appears to do
-  nothing.
+- **The unwrap path stays: decided, do not remove it** (maxnl, Aug 2026). It was offered for removal
+  and deliberately kept.
+
+  **It is not dead code, and calling it that is the mistake to avoid.** Dead code cannot execute; this
+  executes the moment its input appears. `queryObject.has("u2")` is an ordinary runtime test against
+  whatever the page serves - hand it a link carrying `u2` and the destination is read straight out of
+  the link, `_hrefLocal` is set, and the branch at `:2375` runs as designed. What is absent is the
+  input, not the capability, and no amount of the input being absent turns working code into dead
+  code.
+
+  So: it costs one branch and one menu row, it cannot misfire while nothing carries `u2`, and it
+  resumes working by itself if the site reintroduces the parameter - which nobody would announce and
+  nothing else in the script would notice. **A future session finding this branch never taken has
+  found the documented state, not a cleanup opportunity.** The same goes for anyone tidying the menu
+  because a setting appears to do nothing.
 - **The mobile view is out of scope** (maxnl, Aug 2026). The userscript is not used there and may not
   even be installable. 26.11.33 made the *Changes* label show while collapsed on every layout,
   including mobile, and that was deliberately not tested. Do not raise it.
