@@ -53,12 +53,12 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.10.4 | [#16](https://github.com/maxnl/slickdealsPlus/pull/16) | Make `initMenu` actually retry while the header is still rendering |
 | 26.10.5 | [#17](https://github.com/maxnl/slickdealsPlus/pull/17) | Release links that have left the document |
 | 26.10.6 | [#18](https://github.com/maxnl/slickdealsPlus/pull/18) | Beat the page's ID selectors when resetting menu text |
-| 26.10.7 | [#19](https://github.com/maxnl/slickdealsPlus/pull/19) | Recognise the classic layout's deal cards |
+| 26.10.7 | [#19](https://github.com/maxnl/slickdealsPlus/pull/19) | Recognize the classic layout's deal cards |
 | 26.10.8 | [#20](https://github.com/maxnl/slickdealsPlus/pull/20) | Restore menu text color, stop the loading counter overflowing |
 | 26.10.9 | [#21](https://github.com/maxnl/slickdealsPlus/pull/21) | Stop breaking the resolver with hyphenated ids and nav links |
 | 26.10.10 | [#22](https://github.com/maxnl/slickdealsPlus/pull/22) | Keep the menu overlay out of the top bar's layout |
 | 26.10.11 | [#23](https://github.com/maxnl/slickdealsPlus/pull/23) | Reset inherited text properties as a category, tidy the changelog |
-| 26.11.1 | [#24](https://github.com/maxnl/slickdealsPlus/pull/24) | **Send the resolver the id it recognises, cache under our own key** |
+| 26.11.1 | [#24](https://github.com/maxnl/slickdealsPlus/pull/24) | **Send the resolver the id it recognizes, cache under our own key** |
 | 26.11.1 | [#25](https://github.com/maxnl/slickdealsPlus/pull/25) | Publish a GitHub release whenever the version changes |
 | 26.11.2 | [#26](https://github.com/maxnl/slickdealsPlus/pull/26) | Let the menu grow to fit instead of scrolling at 80vh |
 | 26.11.3 | [#27](https://github.com/maxnl/slickdealsPlus/pull/27) | Harden three paths that fail silently on unfamiliar markup |
@@ -75,7 +75,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.14 | [#40](https://github.com/maxnl/slickdealsPlus/pull/40) | **Destination check reads `data-product-exitwebsite`; 26.11.13 had broken ~79% of links** |
 | 26.11.15 | [#41](https://github.com/maxnl/slickdealsPlus/pull/41) | Post-content links are asked under an id of their own from the start |
 | 26.11.16 | [#42](https://github.com/maxnl/slickdealsPlus/pull/42) | Stale pre-26.11.15 cache entries purged once; cap raised from 3000 to 5000 |
-| 26.11.17 | [#43](https://github.com/maxnl/slickdealsPlus/pull/43) | Shared-id requests send the link's own href again (no behaviour change) |
+| 26.11.17 | [#43](https://github.com/maxnl/slickdealsPlus/pull/43) | Shared-id requests send the link's own href again (no behavior change) |
 | 26.11.18 | [#45](https://github.com/maxnl/slickdealsPlus/pull/45) | **A cached destination is never re-checked; affiliate-redirector links stop re-resolving every page load** |
 | 26.11.19 | [#46](https://github.com/maxnl/slickdealsPlus/pull/46) | Free highlighting reaches the homepage list view and the `/deals/` list view |
 | 26.11.20 | [#47](https://github.com/maxnl/slickdealsPlus/pull/47) | **`lno` perturbation reverted - deal-body variant links resolved to the deal's default product** |
@@ -89,7 +89,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.28 | — | The host check no longer runs on ids that cannot be shared, so a cross-host redirect resolves |
 | 26.11.29 | — | A "no destination" answer is remembered, instead of being re-asked on every page load |
 | 26.11.30 | — | Removes a branch 26.11.28 made unreachable, and the helper it was the only caller of |
-| 26.11.31 | — | Guards the two latent CSS traps - no behaviour change |
+| 26.11.31 | — | Guards the two latent CSS traps - no behavior change |
 
 ---
 
@@ -101,7 +101,7 @@ Earlier versions are reconstructed from the file at each merge.
 important structural change, and getting it wrong broke every link.
 
 - `getUrlId()` produces the id the third-party service is addressed with, and which its response is
-  XOR'd against. The service only recognises ids in its own shape. An earlier change redefined it to
+  XOR'd against. The service only recognizes ids in its own shape. An earlier change redefined it to
   make it collision-free, and every lookup started returning 404.
 - `getCacheKey()` is ours: a crc32 of the path plus query with per-pageview parameters
   (`u3`, `adobeRef`, `peid`, `hash`, `auuid`, `sdtrk`) stripped and the rest sorted. Unique per link,
@@ -625,7 +625,7 @@ to `!ask.unique`. Inside that branch `ask.unique` is therefore always false - so
 between `resolveNatural()` and `resolveFinalHop()` could only ever pick the second, and
 `resolveNatural()`, added two releases earlier for exactly that fallback, became unreachable. Nothing
 failed, no gate objected: `no-undef` only catches a name with no definition, never a definition with
-no live caller. It sat there for two releases, with a comment describing behaviour the code could no
+no live caller. It sat there for two releases, with a comment describing behavior the code could no
 longer produce - which is worse than the dead code, because the comment reads as documentation.
 
 Found by asking of every helper "who calls this, and can that call still happen?" rather than by any
@@ -641,7 +641,7 @@ script down with no error a user would ever see, and `$$` swallowing an exceptio
 result into a TypeError.
 
 Held off originally to avoid touching working code mid-churn, which was the right call at the time
-and the wrong one to leave standing. Two lines, no behaviour change, and the next person to add a CSS
+and the wrong one to leave standing. Two lines, no behavior change, and the next person to add a CSS
 rule cannot silently kill the script.
 
 That is generic, needs no knowledge of any particular network, and works for one nobody has seen
@@ -660,7 +660,7 @@ away for naming an affiliate network rather than the shop.
 
 An affiliate network is transit, never another link's destination, so it cannot be the collision the
 check exists to catch. 26.11.21 passes a list of them through. The answer is opaque - `?cid=…&p=…`,
-nothing in it names timex - so there is no way to recognise one by shape; the list needs adding to
+nothing in it names timex - so there is no way to recognize one by shape; the list needs adding to
 when an unfamiliar network appears, and the symptom is a link that stays unresolved with a
 "destination discarded" line naming something that is plainly a network rather than a shop.
 
