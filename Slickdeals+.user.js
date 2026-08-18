@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.32
+// @version      26.11.33
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.32";
+const VERSION = "26.11.33";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,11 @@ const VERSION = "26.11.32";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! the changelog no longer wraps to one word per line on the classic layout`;
+const CHANGES = `! clicking Changes no longer closes the menu on the classic layout
+! the Changes label is visible when collapsed, so the changelog can be found
+! "more" now sits below the changelog instead of beside it
+* the changelog panel sizes itself to the space actually below the bar
+* comment entries are legible on the light panel`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1469,6 +1473,18 @@ const initMenu = elNav =>
 		elFooter.dataset[dataset] = "";
 
 
+	/* The panel is held open by :focus-within on the menu, and the focused element
+	 * is the button. A mousedown here blurs it, which makes the panel display:none
+	 * mid-gesture - so the mouseup lands on nothing, no click is ever generated,
+	 * and the label never toggles its checkbox. The menu closed and the changelog
+	 * stayed collapsed, which is why clicking Changes appeared to do nothing at
+	 * all. The other rows escape this only because they are anchors, which take
+	 * focus on mousedown and so keep it inside the panel.
+	 *
+	 * Suppressing the default mousedown keeps focus on the button, so the panel
+	 * survives the gesture and the click arrives normally. */
+	elFooter.addEventListener("mousedown", evt => evt.preventDefault(), false);
+
 	const elFooterCheckbox = document.createElement("input");
 	elFooterCheckbox.id = "sdpChanges";
 	elFooterCheckbox.type = "checkbox";
@@ -1509,6 +1525,29 @@ const initMenu = elNav =>
 
 	elChanges.append(elChangesLink);
 	elUl.append(elFooterCheckbox, elFooter, elChanges);
+
+	/* The classic panel's max-height was a fixed calc(100vh - 3.5rem), which does
+	 * not know where the panel starts. It opens below the bar, so once the bar
+	 * sits lower than 3.5rem the panel is taller than the space under it: it runs
+	 * past the window edge and scrolls internally while room appears to remain.
+	 * CSS cannot express "the distance from the viewport top to my own top", so
+	 * measure it. Only for the fallback host - on Blueprint the site sizes its own
+	 * dropdown, and an inline max-height there could introduce a scrollbar that
+	 * was never present. Read after a frame so the panel has been laid out; top is
+	 * independent of max-height, so setting it cannot feed back. */
+	if (elMenu.closest(".sdp-fallbackHost"))
+	{
+		const sizePanel = () => requestAnimationFrame(() =>
+		{
+			const top = elUl.getBoundingClientRect().top;
+			if (top > 0)
+				elUl.style.maxHeight = Math.max(120, window.innerHeight - top - 8) + "px";
+		});
+
+		elMenu.addEventListener("focusin", sizePanel, false);
+		window.addEventListener("resize", sizePanel, false);
+	}
+
 	if (document.readyState === "complete")
 		setColors.update();
 	else
@@ -3394,7 +3433,6 @@ html.hideSideColumn aside.slickdealsSidebar.redesignFrontpageDesktop__sidebar, /
 .displayAdContainer, /* ads */
 .mobileAdFluid, /* ads */
 #colorClose,
-#sdpChanges,
 .sdp-menu .changes,
 html.freeOnly .frontpageRecommendationCarousel li:not(.free),
 html.freeOnly .dealTiles li:not(.free),
@@ -3760,13 +3798,18 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mob
 	margin-bottom: 4px;
 }
 
-.sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
+/* Not scoped to :checked any more. The word "Changes" is the only thing telling
+ * anyone a changelog exists, and hiding it until the changelog was already open
+ * meant a collapsed footer read as a bare version number - there was nothing to
+ * click and no reason to think there was. It stays dim while collapsed and
+ * reaches full opacity when open, via the :checked rule above. */
+.sdp-menu .footer::before
 {
 	content: attr(title);
 	float: left;
 }
 
-body:not([data-view="mobile"]) .sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
+body:not([data-view="mobile"]) .sdp-menu .footer::before /* mobile */
 {
 	margin-left: 1em;
 }
@@ -3782,6 +3825,23 @@ body:not([data-view="mobile"]) .sdp-menu input[type="checkbox"]:checked + label.
 body[data-view="mobile"] .changesLink
 {
 	right: 0;
+}
+
+/* Hidden, but NOT display:none - that was a bug, not a style choice. The footer
+   is a <label for="sdpChanges">, and activating a label focuses its control. A
+   display:none control cannot take focus, so the focus went to the document
+   instead, and the classic panel is held open only by :focus-within - it
+   collapsed at the exact moment Changes was clicked, in both directions. Kept
+   off-screen and unclickable instead, so the focus lands inside the menu and the
+   panel stays open. */
+#sdpChanges
+{
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	opacity: 0;
+	pointer-events: none;
 }
 
 #sdpChanges:checked ~ .changes
@@ -4370,6 +4430,15 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
 	color: #444;
 }
 
+/* The 0.5 opacity these carry was chosen against the dark Blueprint bar. On this
+   white panel #444 at half strength is barely legible, so keep the "this is
+   secondary" signal with colour rather than by fading the text out. */
+.sdp-fallbackHost .changes > div.comment
+{
+	color: #6a6a6a;
+	opacity: 1;
+}
+
 /* The changelog is laid out for Blueprint's wider dropdown. In this panel the
    entries wrap, and .changesLink is position:absolute so it left the flow and
    landed on top of the wrapped text. Keep it in the flow, and give the entries
@@ -4379,7 +4448,24 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
    the one selecting #sdpChanges:checked followed by .changes - also sets a
    0.6em margin, and an ID beats two classes, so a plain .sdp-fallbackHost
    .changes margin here is silently discarded. Matching the ID outranks it. */
-.sdp-fallbackHost #sdpChanges:checked ~ .changes
+.sdp-fallbackHost /* Hidden, but NOT display:none - that was a bug, not a style choice. The footer
+   is a <label for="sdpChanges">, and activating a label focuses its control. A
+   display:none control cannot take focus, so the focus went to the document
+   instead, and the classic panel is held open only by :focus-within - it
+   collapsed at the exact moment Changes was clicked, in both directions. Kept
+   off-screen and unclickable instead, so the focus lands inside the menu and the
+   panel stays open. */
+#sdpChanges
+{
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+#sdpChanges:checked ~ .changes
 {
 	margin: 1.4em 0.6em 0.2em;
 	line-height: 1.45;
@@ -4414,10 +4500,17 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
 	margin-left: 0;
 }
 
+/* Every declaration here is defensive against the same leaked page CSS that
+   pinned the entries to 1em - "more" was rendering beside the text rather than
+   under it, which only an out-of-flow box can do. clear:both is what puts it on
+   its own line if anything upstream floats it. */
 .sdp-fallbackHost .changesLink
 {
-	position: static;
-	display: block;
+	position: static !important;
+	float: none !important;
+	clear: both;
+	display: block !important;
+	width: auto !important;
 	margin-top: 0.4em;
 	text-align: right;
 }
