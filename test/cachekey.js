@@ -3,7 +3,16 @@
 const fs = require("fs");
 const SRC = require("path").join(__dirname, "..", "Slickdeals+.user.js");
 const src = fs.readFileSync(SRC, "utf8");
-const cut = (from, to) => { const a = src.indexOf(from); const b = src.indexOf(to, a); return src.slice(a, b + to.length); };
+/* Guarded like lifecycle.js: an unguarded indexOf returns -1, indexOf(to, -1)
+ * then searches from 0, and the slice silently yields the wrong code - a harness
+ * that extracts the wrong function proves nothing while still printing "ok". */
+const cut = (from, to) => {
+	const a = src.indexOf(from);
+	if (a < 0) throw new Error("NOT FOUND IN SHIPPED FILE: " + from);
+	const b = src.indexOf(to, a);
+	if (b < 0) throw new Error("END MARKER NOT FOUND AFTER: " + from);
+	return src.slice(a, b + to.length);
+};
 const getCacheKey = new Function(
 	cut("const crc32 = text =>", "\n};") + "\n" +
 	cut("const getCacheKey = (() =>", "\n})();") + "\nreturn getCacheKey;")();
