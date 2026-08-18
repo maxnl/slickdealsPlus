@@ -1,7 +1,11 @@
 const fs = require("fs");
 const src = fs.readFileSync(require("path").join(__dirname, "..", "Slickdeals+.user.js"), "utf8");
 const a = src.indexOf("const hostOf = value =>");
-const b = src.indexOf("})();", src.indexOf("const isDestinationPlausible")) + 5;
+const c = src.indexOf("const isDestinationPlausible");
+/* Fail loudly if the shipped file no longer contains these. Unguarded, a -1
+ * slices the wrong region and the suite reports on code that is not shipped. */
+if (a < 0 || c < 0) throw new Error("NOT FOUND IN SHIPPED FILE: hostOf / isDestinationPlausible");
+const b = src.indexOf("})();", c) + 5;
 const fn = new Function(src.slice(a, b) + "\nreturn isDestinationPlausible;")();
 const el = (host, href) => ({ dataset: host === null ? {} : { productExitwebsite: host },
 	_hrefOrig: href || "https://slickdeals.net/click?sdtid=1&lno=1" });
