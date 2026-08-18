@@ -378,6 +378,12 @@ package managers"* checked. The resolver's address is not written down in this r
 script assembles it at runtime from the encoded string at the foot of the file, and upstream
 obfuscated it deliberately. Decode that argument when you need the hostname.
 
+- **Only three hosts are reachable from here**, on the network policy described above:
+  `slickdeals.net`, `github.com`, and the resolver. Everything else - `example.com` included - fails
+  with curl exit code `000`, which reads like a dead link and is not one. Do **not** report a readme
+  link as broken on that basis; `tampermonkey.net`, `violentmonkey.github.io` and `img.shields.io`
+  all fail here and are all fine. The upstream repo separately answers **403** to curl with any
+  user-agent, browser string included - also not a broken link. See §5a.
 - **The resolver requires `Origin` and `Referer`** — without them everything 404s with error `1.30`,
   which reads exactly like the service being down.
 - **Node's `fetch` gets 400 from the resolver here; `curl` gets 200.** Use curl for probes.
