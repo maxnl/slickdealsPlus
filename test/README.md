@@ -17,6 +17,25 @@ that is a reason to restructure the script, not to model it.
 | `stability.js` | the cost of a link that stays unresolvable, and that the retry id is deterministic |
 | `cachekey.js` | what `getCacheKey()` must drop (everything that rotates between loads) and must keep (everything that separates two links) — including the block a link sits in: replies, the wiki, and featured comments, each asserted to key differently for the identical URL and anchor text |
 
+## Do they actually catch anything?
+
+Checked by mutation, Aug 2026 - the shipped file was broken four ways in a scratch copy and each
+break run against the suite:
+
+| break | caught by |
+|---|---|
+| `isHostShaped` returns `true` for everything | `unit.js` |
+| `u3` dropped from `getCacheKey`'s volatile list | `cachekey.js` |
+| `pv` / `au` dropped from it - the exact 26.11.26 fix | `cachekey.js` |
+| `trd` added to it, merging two posts' first links | `cachekey.js` |
+
+All four failed loudly. Worth knowing the technique as much as the result: **"the suite passes" and
+"the suite would notice" are different claims**, and only the second is worth anything. One caveat
+found doing it - a fifth break, removing `queryObject.delete("u3")` from `getUrlId`, changed nothing
+and failed nothing. That is correct, not a gap: it sits in a narrow fallback branch, and the cache
+key strips `u3` through a separate list. Check which function you actually mutated before reading a
+survival as a hole.
+
 ## What these do NOT cover
 
 **Everything outside link resolution.** The harnesses extract ten functions - `crc32`, `getCacheKey`,
