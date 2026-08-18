@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.31
+// @version      26.11.32
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.31";
+const VERSION = "26.11.32";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,7 +34,7 @@ const VERSION = "26.11.31";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `# guards two places where one bad css selector could have stopped the whole script`;
+const CHANGES = `! the changelog no longer wraps to one word per line on the classic layout`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -4389,9 +4389,18 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
    the first line of an entry to the right while wrapped lines stayed at the
    padding edge - the two did not line up. Position it instead, so every line of
    an entry starts at the same place and the marker hangs beside them. */
+/* width:auto is load-bearing and cannot be dropped as redundant. Page CSS pins
+   these to 1em - 12px at the panel's 12px font size - and a 12px box wraps every
+   entry to one word per line. Measured: the div computed width:12px inside a
+   238px parent, and width:auto restored it to 240px while max-width, display,
+   float and min-width all changed nothing. !important because the rule doing it
+   is in a cross-origin sheet, so its specificity cannot be read - the same class
+   of leak the reset above documents, which covers colour and typography but not
+   box metrics. */
 .sdp-fallbackHost .changes > div
 {
 	position: relative;
+	width: auto !important;
 	padding-left: 1.4em;
 	margin-bottom: 0.4em;
 	text-indent: 0;

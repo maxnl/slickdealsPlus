@@ -13,8 +13,9 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.31**. Confirmation status lives in §1c and is appended to, never
-rewritten - see the note there for why.
+Released and current: **v26.11.32**. Confirmation status lives in §1c and is appended to, never
+rewritten - see the note there for why. **26.11.32 is not in §1c yet** - it ships a fix that was
+measured but not re-checked in a browser.
 
 | version | state |
 | --- | --- |
@@ -25,7 +26,8 @@ rewritten - see the note there for why.
 | 26.11.28 | good, superseded - the host check runs only on ids that can be shared |
 | 26.11.29 | good, superseded - a "no destination" answer is remembered instead of re-asked every load |
 | 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
-| 26.11.31 | **current** - guards the two latent CSS traps; no behaviour change |
+| 26.11.31 | good, superseded - guards the two latent CSS traps; no behaviour change |
+| 26.11.32 | **current** - the changelog no longer wraps to one word per line; unconfirmed in a browser |
 
 **Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
 is remembered as failed for a week:
@@ -38,71 +40,50 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ## 1a. Start here next session
 
-One thing is waiting. It needs a browser; it cannot be done from a container.
+One item is waiting, in two parts - a fix to confirm and a bug still open. Both need a browser;
+neither can be done from a container.
 
-**1. The changelog panel renders one word per line.** Open bug, reproduced by maxnl on the classic
-layout at 26.11.30. The changelog block under **Changes** wraps every word onto its own line, and
-`more` sits beside the text instead of below it.
+**1. Confirm the 26.11.32 changelog fix, and fix the footer that closes the menu.**
 
-**A second bug was found while trying to measure the first, and it blocks the measurement.**
-*Clicking the footer closes the menu on the classic layout.* The footer reading `v<VERSION> · <FORK>`
-is a `<label for="sdpChanges">`, and `#sdpChanges` sits in the `display:none` group near the top of
-the CSS. **A `display:none` input cannot take focus**, so the browser's label-activation moves focus
-out of the menu; the classic panel is held open only by `.sdp-fallbackHost .sdp-menu:focus-within >
-ul`, so it collapses at the moment Changes is expanded. The checkbox itself still toggles - measured,
-`.changes` computes to `display: block` - but its `ul` is `display: none` by then, so every width
-reads 0. Any diagnostic that asks a human to click Changes and then measure will report zeros. Two
-runs were lost to this.
+*The wrapping bug is diagnosed and fixed, not yet confirmed.* Forced-open measurement on the classic
+layout found one bad box: `.changes > div` computed **`width: 12px`** inside a 238px parent - 1em at
+the panel's 12px font size - so every entry wrapped to one word. The `ul` (266px, `min-width` 264px
+applying), `.changes` (238px) and `.changesLink` (238px, `position: static`) were all correct, which
+also killed the long-standing suspicion that the classic `.changesLink` override was losing. It wins.
 
-Worth fixing on its own account: on this layout the changelog cannot be read at all by clicking.
+Probing one property at a time, **only `width: auto` helped** - 12px to 240px - while `max-width`,
+`display`, `float` and `min-width` changed nothing. No rule in this file sets width on that div, and a
+scan of same-origin sheets matched nothing, because the site's CSS is cross-origin and cannot be
+enumerated. So this is the **fourth instance of the class documented above
+`.sdp-fallbackHost .sdp-menu > ul *`**: page CSS leaking into the injected panel. That reset covers
+colour and typography and not box metrics, which is why it did not catch this one.
 
-*Measure by forcing the panel open instead of focusing it*, which is what the snippet below does -
-it sets the checkbox, forces the `ul` to `display:block` inline, measures, and restores. No clicking,
-so focus never matters:
+26.11.32 sets `width: auto !important` on `.sdp-fallbackHost .changes > div`. `!important` because the
+opposing rule is unreadable, so its specificity cannot be reasoned about. **To confirm:** open the
+menu on a classic page and read the changelog - entries should wrap normally at ~240px. Then add a row
+to §1c.
+
+*The footer still closes the menu, and that is a separate bug.* The footer is a
+`<label for="sdpChanges">`, and `#sdpChanges` is in the `display:none` group. **A `display:none` input
+cannot take focus**, so label activation moves focus out of the menu, and the classic panel is held
+open only by `.sdp-fallbackHost .sdp-menu:focus-within > ul`. It collapses exactly when Changes is
+expanded, so the changelog cannot be read there by clicking at all. The checkbox does toggle -
+`.changes` computes to `display: block` - it is only the panel that vanishes. Not fixed in 26.11.32.
+
+Likely fix: keep the checkbox focusable but invisible (`position:absolute; opacity:0` rather than
+`display:none`), or hold the panel open on something other than focus. Neither is verified. Two
+measurement rounds were lost to this before the cause was found, so any diagnostic here must force the
+panel open rather than ask a human to click:
 
 ```js
-(()=>{const menu=document.querySelector(".sdp-menu"),c=document.querySelector(".changes");
-if(!menu||!c){console.log("menu or .changes missing");return;}
+(()=>{const c=document.querySelector(".changes");if(!c){console.log("no .changes");return;}
 const ul=c.parentElement,cb=document.getElementById("sdpChanges");
-if(cb)cb.checked=true;
-const prev=ul.style.display; ul.style.display="block";
-const g=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();
- return {w:Math.round(r.width),display:s.display,position:s.position,whiteSpace:s.whiteSpace};};
-const d=c.querySelector("div"),l=document.querySelector(".changesLink");
-console.log("fallbackHost?",!!document.querySelector(".sdp-fallbackHost"));
-console.log("ul          ",g(ul),"minWidth",getComputedStyle(ul).minWidth);
-console.log(".changes    ",g(c));
-console.log("first div   ",d&&g(d));
-console.log(".changesLink",l&&g(l));
-console.log("menu box    ",Math.round(menu.getBoundingClientRect().width),
- "parent",menu.parentElement&&menu.parentElement.className);
+if(cb)cb.checked=true;const prev=ul.style.display;ul.style.display="block";
+const d=c.querySelector("div"),g=e=>Math.round(e.getBoundingClientRect().width);
+console.log("ul",g(ul),".changes",g(c),"first div",g(d),
+ "| first div should be ~240, not ~29");
 ul.style.display=prev;})();
 ```
-
-*And the suspicion recorded here previously was wrong.* It read that `.changesLink` keeps its base
-`position:absolute` because the classic override loses. It does not lose:
-`.sdp-fallbackHost .changesLink { position: static }` is two classes and later in the file, and a
-forced-open run confirms it computes to `static`. Look instead at which *containing box* is narrow -
-one word per line means a box about as wide as the longest word.
-
-**Measured, and the culprit is isolated** (maxnl, Aug 2026, classic layout, forced-open):
-
-| element | width | verdict |
-|---|---|---|
-| `ul` | 266px, `min-width` 264px applying | fine |
-| `.changes` | 238px | fine |
-| **`.changes > div`** | **29px** | **the bug** |
-| `.changesLink` | 238px, computed `position: static` | fine |
-
-A `display:block` box inside a 238px block parent cannot be 29px in normal flow, and **no rule in this
-file constrains it** - `.changes > div` is styled in four places and none sets width, float or display.
-So something outside is. That makes this most likely the **fourth case of the class the comment above
-`.sdp-fallbackHost .sdp-menu > ul *` describes**: the panel is injected into page markup whose CSS we
-do not control, and three earlier bugs came the same way - weight, then shadow, then colour. That
-reset covers colour and typography and **does not cover width, display or float**. Widening it is the
-likely fix, but name the offending rule first.
-
-**Do not fix this from the CSS by inspection** - confirm with the numbers first.
 
 Cache clear, needed before any resolution test:
 
@@ -136,6 +117,8 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | A "no destination" answer re-asked every load | Fixed in 26.11.29 |
 | Dead code left by 26.11.28 (`resolveNatural`) | Removed in 26.11.30 |
 | `fixCSS()` / `highlightCards()` latent traps | Guarded in 26.11.31 |
+| The changelog wrapping to one word per line | Fixed in 26.11.32 - **shipped, not yet confirmed** |
+| Concurrency, whether a request queue is needed | Measured Aug 2026: 35 requests, peak 35, 0 failed - no |
 | README screenshot of the menu | **Done** - `docs/classic-menu.png` and `docs/menu.png`, both in the README |
 | Documenting the menu options for users | **Done** - the options table in the README |
 | The resolver hostname appearing in plain text | **Done** - removed from every tracked file |
@@ -212,12 +195,11 @@ Everything else previously listed here has been settled. Both need a browser.
   one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
   dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
   evidence alone.
-- **The changelog panel rendering one word per line.** Open bug, see §1a. Not a resolver issue - a
-  layout one, in the menu's own CSS.
-- **Clicking the footer closes the classic-layout menu**, so the changelog cannot be read there at
-  all. Found while trying to measure the item above, and it blocks that measurement. Cause is known
-  and written up in §1a: a `display:none` checkbox cannot take focus, and the panel is held open by
-  `:focus-within`. Fixing it is not the same job as the wrapping bug, though one fix may serve both.
+- **Clicking the footer closes the classic-layout menu**, so the changelog cannot be read there by
+  clicking at all. Found while measuring the wrapping bug, which it blocked twice. Cause is known and
+  written up in §1a: a `display:none` checkbox cannot take focus, and the panel is held open by
+  `:focus-within`. Separate from the wrapping bug fixed in 26.11.32 - that one was a width leak, this
+  one is focus - though a single change to how the panel opens might serve both.
 
 ---
 
