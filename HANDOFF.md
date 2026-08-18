@@ -34,6 +34,11 @@ Confirmed in a browser, at 26.11.28 or earlier: all eight Amazon colour variants
 ASINs, the rei.com post link resolves, both Timex links resolve, the wiki block resolves, and the
 three links in post 21 of thread 19854408 resolve to three different destinations.
 
+**26.11.31 was browser-tested against all of those by maxnl (Aug 2026) and passed.** That build
+contains 26.11.29's remembered "no destination" answer, so that change is exercised too - but a
+passing run does not retire the residual risk in §4, "the one risk worth knowing", which is about a
+*transient* bad answer being cached rather than a steady-state wrong one.
+
 **Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
 is remembered as failed for a week:
 
@@ -45,7 +50,7 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ## 1a. Start here next session
 
-Three things are waiting, in order of value. All three need a browser; none can be done from a
+Two things are waiting, in order of value. Both need a browser; neither can be done from a
 container.
 
 **1. The changelog panel renders one word per line.** Open bug, reproduced by maxnl on the classic
@@ -85,9 +90,6 @@ setTimeout(()=>{const blue=document.querySelectorAll('a.notResolved').length;
 
 **peak concurrent** is the number that matters. `failed` above zero alongside a high peak is the
 signal that a queue is needed; if `failed` is 0 the whole item can be closed.
-
-**3. Confirm 26.11.29 and 26.11.31 in a browser.** Neither has been. 26.11.31 only adds two guards.
-26.11.29 carries the one real risk in recent releases - see §4, "the one risk worth knowing".
 
 Cache clear, needed before any resolution test:
 
@@ -176,6 +178,9 @@ Everything else previously listed here has been settled. All three need a browse
   encoded string at the foot of the file. Decode that when you need it.
 - **The screenshot of the default layout is from v23.10.22** and shows fewer options than the table
   beneath it. Left as is deliberately (maxnl, Aug 2026).
+- **Both menu screenshots are in and done.** `docs/menu.png` and `docs/classic-menu.png` render side
+  by side in the readme. The classic one was captured by hand by maxnl, since the site resets headless
+  Chromium here - do not re-list it as outstanding.
 
 ## 4. Known, understood, and deliberately not acted on
 
