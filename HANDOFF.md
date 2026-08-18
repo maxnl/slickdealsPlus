@@ -63,9 +63,9 @@ ul.style.display=prev;})();
 ```
 
 **Page CSS leaks into this panel, and the reset does not stop all of it.** The comment above
-`.sdp-fallbackHost .sdp-menu > ul *` records three cases - weight, shadow, colour. 26.11.32 was the
+`.sdp-fallbackHost .sdp-menu > ul *` records three cases - weight, shadow, color. 26.11.32 was the
 fourth: an unreadable cross-origin rule pinned `.changes > div` to `1em`, 12px at the panel's font
-size, wrapping every entry to one word. The reset covers colour and typography and **not box
+size, wrapping every entry to one word. The reset covers color and typography and **not box
 metrics**, so anything geometric arriving from the page still has to be fought per-rule, with
 `!important`, because the opposing rule's specificity cannot be read.
 
@@ -88,7 +88,7 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 
 | | |
 |---|---|
-| The 26.11.13 regression (colour variants, then 4 links in 5) | Fixed in 26.11.14 |
+| The 26.11.13 regression (color variants, then 4 links in 5) | Fixed in 26.11.14 |
 | Hardcoded affiliate-network lists | Removed in 26.11.23; the rule is generic and must stay that way |
 | A call to a function deleted in the same commit | Fixed in 26.11.25, plus a `no-undef` release gate |
 | The deal button and image re-requesting on every page load | Fixed in 26.11.26 (`pv`/`au` stripped from the cache key) |
@@ -129,7 +129,7 @@ been *verified*, by whom and when. Both are append-only and they sit next to eac
 tidy-up will read them as redundant - they are not. A release is done the moment it ships and
 verified only when someone runs it.
 
-The standard set, referred to below as **the full set**: all eight Amazon colour variants keeping
+The standard set, referred to below as **the full set**: all eight Amazon color variants keeping
 their own ASINs, the rei.com post link, both Timex links, the wiki block, and the three links in post
 21 of thread 19854408 resolving to three different destinations.
 
@@ -178,13 +178,10 @@ live number, not a count of anchors.
 
 ## 3. Genuinely open
 
-Everything else previously listed here has been settled. The one below needs a browser, and more than
-that it needs a page carrying the link shape it asks about.
+Everything here has been settled. `unwrapLinks` was the last entry and moved to §3a in Aug 2026 - it
+is a decision to take, not a question to research.
 
-- **Whether `unwrapLinks` ever fires anywhere.** Across every saved page - 248 `/click` links - **not
-  one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
-  dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
-  evidence alone.
+- *(nothing currently open)*
 
 ---
 
@@ -200,6 +197,19 @@ that it needs a page carrying the link shape it asks about.
   a reply all holding the identical URL and anchor text, asserted to key differently and stably.
 - **The resolver's address stays out of this repo.** The script assembles it at runtime from the
   encoded string at the foot of the file. Decode that when you need it.
+- **Nothing on Slickdeals can be unwrapped any more; it all requires resolving** (maxnl, Aug 2026).
+  This is a call about the site, not a sampling result, and it outranks the sampling: no `u2` was found
+  across 248 saved links or on a live thread page, but a zero count could never have proved the shape
+  extinct, so do not go looking for one to "confirm" it.
+
+  What follows from it: `unwrapLinks` gates exactly one branch - `elA._hrefLocal ? SETTINGS.unwrapLinks
+  : SETTINGS.resolveLinks` - and `_hrefLocal` is set only when `u2` is present. So the menu's *Unwrap
+  tracking links* checkbox currently governs nothing. **Whether to remove the setting and its branch is
+  an open decision, not an open question**; it was left in place because it costs nothing and would
+  work again if the site ever reintroduced `u2`.
+- **The mobile view is out of scope** (maxnl, Aug 2026). The userscript is not used there and may not
+  even be installable. 26.11.33 made the *Changes* label show while collapsed on every layout,
+  including mobile, and that was deliberately not tested. Do not raise it.
 - **The screenshot of the default layout is from v23.10.22** and shows fewer options than the table
   beneath it. Left as is deliberately (maxnl, Aug 2026).
 - **Both menu screenshots are in and done.** `docs/menu.png` and `docs/classic-menu.png` render side
@@ -227,10 +237,13 @@ decided against it for now.
 Since 26.11.29 that answer is **remembered** rather than re-asked on every page load. It expires after
 a week like any other recorded failure, so a link the service later learns about is still picked up.
 
-**The 26.11.19 colour collapse is still unexplained.** Its `resolverRequest()` returned the natural
-id whenever `pno` was present, so it never touched a deal body's links — yet the colours collapsed.
-The `u3` gate makes the current code safe regardless, but the cause is unknown, so watch the colours
-on the first load after any change in this area.
+**26.11.19, where color variants stopped keeping their own destinations: fixed, and done.** Every
+variant of a deal resolved to the same product instead of its own ASIN. It was fixed, it has stayed
+fixed, and the `u3` gate makes the current code safe regardless - **this is not an open item and
+should not be listed as one.** What is unknown is only *why* it happened: `resolverRequest()` returned
+the natural id whenever `pno` was present, so on the face of it it never touched a deal body's links.
+An unexplained cause is not the same as an unfixed bug. The only thing it earns is a habit: glance at
+the variant colors on the first load after changing anything in this area.
 
 **Unbounded concurrency: measured, and it is fine.** `processLinks()` fires every request with no
 queue. Measured by maxnl in a browser on thread 19049776 (Aug 2026, 26.11.31, cold cache): **35
@@ -289,7 +302,7 @@ node test/unit.js && node test/cachekey.js && node test/answers.js && node test/
   gets a different `u3` than a real session. That confusion has produced wrong conclusions here at
   least four times, including two retracted claims about Timex.
 - Measure how far a problem reaches rather than trusting the report that surfaced it. 26.11.13 was
-  reported as a few colour links and was four links in five.
+  reported as a few color links and was four links in five.
 
 ---
 

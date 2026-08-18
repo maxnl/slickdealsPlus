@@ -2176,7 +2176,7 @@ const processLinks = (node, force) =>
 		 * - a post's links, which carry `lno` and no `pno`. A deal body's links
 		 * carry `pno`, their natural id is already unique, and they are sent
 		 * exactly as the page wrote them. `lno` selects the variant there, and
-		 * touching it collapses every colour onto the deal's default.
+		 * touching it collapses every color onto the deal's default.
 		 *
 		 * This is one request, not two, for the links that used to need a second:
 		 * the answer to an id the service holds nothing for is resolved on demand
@@ -2235,10 +2235,10 @@ const processLinks = (node, force) =>
 					 *
 					 * Re-asking means altering the request, and `lno` is what a deal
 					 * body's variant links encode - perturbing it once rewrote seven
-					 * colour links to the deal's default product. That is why this
+					 * color links to the deal's default product. That is why this
 					 * only happens for an answer that already disagrees: a link
 					 * answered with its own merchant, which is every one of those
-					 * colour links, never reaches here. And the result is taken only
+					 * color links, never reaches here. And the result is taken only
 					 * when it matches the stated host, so a fall back to the deal's
 					 * default cannot be accepted in its place. */
 					/* The check has a job only when the id could be shared.
@@ -2471,9 +2471,9 @@ const updateLinks = () =>
  *
  * 2. `lno` SELECTS THE VARIANT, SO PERTURBING IT IS DESTRUCTIVE - EXCEPT WHERE
  *    THE LINK CARRIES `u3`.
- *    A deal body's colour links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and
+ *    A deal body's color links are `&lno=3&trd=Khaki`, `&lno=6&trd=Black`, and
  *    `lno` is what picks the product. Replacing it collapses all eight onto the
- *    deal's default (measured: every colour became B0GTNLL1H8). Adding `pcoid`
+ *    deal's default (measured: every color became B0GTNLL1H8). Adding `pcoid`
  *    instead is worse - it was correct for Black and wrong for Khaki, so one
  *    sample makes it look safe.
  *    A link carrying `u3` is different in kind: `u3` IS the destination,
@@ -2740,12 +2740,12 @@ const decodeResolved = (id, response) =>
  * this link's cache key.
  *
  * **That is destructive in general** - `lno` selects the variant on a deal
- * body's links, and perturbing it once rewrote seven colour links to the deal's
+ * body's links, and perturbing it once rewrote seven color links to the deal's
  * default product (26.11.15, reverted in 26.11.20). It is safe *here* only
  * because of where it is called from and what the caller does with the answer:
  * only when the natural answer disagrees with the host the anchor states, and
  * only if what comes back agrees with it. A link answered with its own merchant
- * - which is every one of those colour links - never reaches this.
+ * - which is every one of those color links - never reaches this.
  *
  * Nothing here knows about any particular network, and nothing needs to.
  * @function
@@ -2775,7 +2775,7 @@ const resolveFinalHop = (urlObject, key) =>
  * are in FORK-NOTES):
  *
  * - A deal body's links carry `pno`, and their natural id is already unique per
- *   link - `1311423pno19854408sdtid3lno`. Asked under it, all eight colour links
+ *   link - `1311423pno19854408sdtid3lno`. Asked under it, all eight color links
  *   come back with their own ASIN, in one request each. **Nothing to improve,
  *   and everything to lose:** replacing `lno` collapses all eight onto the deal's
  *   default, and adding `pcoid` rewrote Khaki to a different product while
@@ -2790,7 +2790,7 @@ const resolveFinalHop = (urlObject, key) =>
  *
  * So the perturbation is applied exactly where the id is ambiguous by
  * construction, and never where it is not. That is the same rule 26.11.19 used
- * and 26.11.20 reverted - reverted because a deal body's colour links collapsed,
+ * and 26.11.20 reverted - reverted because a deal body's color links collapsed,
  * which this rule does not touch, so the collapse had another cause and the
  * revert was aimed at the wrong thing.
  * @function
@@ -2813,7 +2813,7 @@ const askFor = (urlObject, key, id) =>
 	 *
 	 * A link with no `u3` has nothing in it to resolve from: the service has to
 	 * identify it by the parameters, `lno` among them, so changing `lno` asks
-	 * about a different link and gets a different product. That is the colour
+	 * about a different link and gets a different product. That is the color
 	 * variants, and it is why perturbing them collapses them onto the deal's
 	 * default.
 	 *
@@ -4379,15 +4379,15 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
    property, not only the ones already known to break. The panel is injected
    into page markup whose CSS we do not control and inherits from it: three
    separate bugs here came from exactly that route - weight, then shadow, then
-   colour - each found only after it shipped. Resetting the category costs one
+   color - each found only after it shipped. Resetting the category costs one
    rule and ends the sequence. The ul itself is excluded deliberately, since it
-   is what supplies the colour these inherit. */
+   is what supplies the color these inherit. */
 .sdp-fallbackHost .sdp-menu > ul *
 {
-	/* colour has to come with them. The bar styles its links white for a dark
-	   background; removing the text-shadow without also reclaiming colour left
+	/* color has to come with them. The bar styles its links white for a dark
+	   background; removing the text-shadow without also reclaiming color left
 	   white text on the white panel - invisible, and the page's :hover turned it
-	   yellow. inherit takes the panel's own colour, so dark mode follows too. */
+	   yellow. inherit takes the panel's own color, so dark mode follows too. */
 	color: inherit !important;
 	font-style: normal !important;
 	font-weight: normal !important;
@@ -4432,7 +4432,7 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
 
 /* The 0.5 opacity these carry was chosen against the dark Blueprint bar. On this
    white panel #444 at half strength is barely legible, so keep the "this is
-   secondary" signal with colour rather than by fading the text out. */
+   secondary" signal with color rather than by fading the text out. */
 .sdp-fallbackHost .changes > div.comment
 {
 	color: #6a6a6a;
@@ -4481,7 +4481,7 @@ html[data-loading] .sdp-fallbackHost .sdp-menu::before
    238px parent, and width:auto restored it to 240px while max-width, display,
    float and min-width all changed nothing. !important because the rule doing it
    is in a cross-origin sheet, so its specificity cannot be read - the same class
-   of leak the reset above documents, which covers colour and typography but not
+   of leak the reset above documents, which covers color and typography but not
    box metrics. */
 .sdp-fallbackHost .changes > div
 {
