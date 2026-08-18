@@ -23,7 +23,7 @@ incrementing counter and does **not** correspond to upstream's. See
 - [What changed, by theme](#what-changed-by-theme)
 - [Issues we hit](#issues-we-hit)
 - [Caveats for anyone editing this](#caveats-for-anyone-editing-this)
-- [Outstanding items](#outstanding-items)
+- [Known characteristics and accepted limitations](#known-characteristics-and-accepted-limitations)
 - [Suggested enhancements](#suggested-enhancements)
 
 ---
@@ -150,7 +150,7 @@ their own distinct ASINs.
 
 The corollary for the fork: a client-side id scheme *can* reach a correct answer, but only by
 perturbing `lno` in the URL that is submitted alongside it, which writes a new entry into someone
-else's cache on every link. Not adopted - see [outstanding items](#outstanding-items).
+else's cache on every link. Not adopted - see [known characteristics](#known-characteristics-and-accepted-limitations).
 
 `u3` decodes (base64url) to 88 bytes of high-entropy data that neither the resolver's own unmasking
 scheme nor any obvious key turns into a URL - presumably encrypted with a server-side key, which is
@@ -881,8 +881,12 @@ of them is a layout the script is silently inert on.
   `[data-v-ID]` selectors by matching `/^v([A-F]|-\d)/`.
 - **`datasets` is a Proxy** that writes to every registered dataset but reads only the first, and
   dataset values are strings.
-- **localStorage keys are string literals** (`"slickdeals+"`, `"slickdeals+links"`), independent of
-  script identity — renaming the script cannot orphan settings or the cache.
+- **localStorage keys are hardcoded, not derived from script identity** - renaming the script cannot
+  orphan settings or the cache. Only the first is a literal: `LocalStorageName = "slickdeals+"`, and
+  `LocalStorageNameLinks = LocalStorageName + "links"`. **Grepping the file for `"slickdeals+links"`
+  therefore finds nothing**, which looks alarming the first time, because the escape hatch handed to
+  users everywhere in these notes is `localStorage.removeItem("slickdeals+links")`. That key is right;
+  it is just assembled one line below the one you will find.
 - **A threshold of 0 switches its feature off.** `SETTINGS.highlightRating && …` — `0 &&` is falsy,
   so score and price-difference highlighting do nothing until set above zero. This is not a bug, but
   it looks exactly like one.
@@ -898,9 +902,17 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ---
 
-## Outstanding items
+## Known characteristics and accepted limitations
 
-None of these is a defect; all are known and deliberate.
+**Nothing here is open work.** The heading used to read *Outstanding items*, which was wrong in a way
+that mattered: a reader comparing this file against `MAINTAINING.md` §3 - which correctly says nothing
+is open - found ten un-struck rows here and reasonably concluded the two documents disagreed. They do
+not. None of these is a defect; all are known and deliberate, and several are confirmations that
+something works rather than items at all.
+
+**Open work, when there is any, lives in `MAINTAINING.md` §3.** This table is the fork's counterpart
+to that file's §4 - the same category of "known, understood, deliberately not acted on", kept here
+because these rows are code-level detail belonging beside the architecture they describe.
 
 > **Read the strikethroughs.** Rows written `~~like this~~` are **finished** and kept only for the
 > history of what was wrong and how it was found. They are not work. Only the un-struck rows are

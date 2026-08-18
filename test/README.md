@@ -17,6 +17,21 @@ that is a reason to restructure the script, not to model it.
 | `stability.js` | the cost of a link that stays unresolvable, and that the retry id is deterministic |
 | `cachekey.js` | what `getCacheKey()` must drop (everything that rotates between loads) and must keep (everything that separates two links) — including the block a link sits in: replies, the wiki, and featured comments, each asserted to key differently for the identical URL and anchor text |
 
+## What these do NOT cover
+
+**Everything outside link resolution.** The harnesses extract ten functions - `crc32`, `getCacheKey`,
+`getUrlId`, `hostOf`, `isHostShaped`, `isDestinationPlausible`, `decodeResolved`, `resolveFinalHop`,
+`askFor` and `RESOLVE_RETRY_AFTER` - and touch nothing in `initMenu()`, the CSS, `processCards()`,
+`highlightCards()` or the ad sweep. There is no DOM here, so that is a boundary rather than an
+oversight.
+
+**It matters because a green suite says nothing about the menu.** 26.11.32 and 26.11.33 were both
+menu fixes - a changelog wrapping to one word per line, and a click that closed the panel instead of
+opening it - and every gate in `MAINTAINING.md` §5 passed on the broken builds. maxnl found both in a
+browser. **A change to the menu, the CSS, card processing or ad blocking is unverified until someone
+loads a page**, whatever the harnesses print; §1a of `MAINTAINING.md` carries the method for
+measuring the panel without the act of measuring closing it.
+
 `answers.js` reproduces the real resolver ids (`19854408sdtid1lno`, `1311423pno19854408sdtid3lno`),
 which is the check that the fixtures are shaped like the page and not like a guess.
 
