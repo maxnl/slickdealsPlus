@@ -13,8 +13,8 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.31**, and browser-tested by maxnl (Aug 2026) against the full set
-below — it passed.
+Released and current: **v26.11.31**. Confirmation status lives in §1c and is appended to, never
+rewritten - see the note there for why.
 
 | version | state |
 | --- | --- |
@@ -26,14 +26,6 @@ below — it passed.
 | 26.11.29 | good, superseded - a "no destination" answer is remembered instead of re-asked every load |
 | 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
 | 26.11.31 | **current** - guards the two latent CSS traps; no behaviour change |
-
-Confirmed in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com post link
-resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21 of thread
-19854408 resolve to three different destinations.
-
-That build contains 26.11.29's remembered "no destination" answer, so that change is exercised too -
-but a passing run does **not** retire the residual risk in §4, "the one risk worth knowing", which is
-about a *transient* bad answer being cached rather than a steady-state wrong one.
 
 **Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
 is remembered as failed for a week:
@@ -69,8 +61,8 @@ locate the culprit immediately. Leading suspicion: `.changesLink` is `position:a
 in the base CSS and the classic-layout override may not be winning, leaving the text to wrap in the
 gap beside it. **Do not fix this from the CSS by inspection** - confirm with the numbers first.
 
-**2. Concurrency.** The last genuinely unmeasured thing. Paste on a busy deal page (thread 19049776 -
-**39 links distinct by cache key**) *before* loading, then reload:
+**2. Concurrency.** The last genuinely unmeasured thing. Paste on a busy deal page (thread 19049776)
+*before* loading, then reload:
 
 ```js
 (()=>{const f=window.fetch;let inflight=0,peak=0,n=0,fail=0;const t0=performance.now();
@@ -87,12 +79,19 @@ setTimeout(()=>{const blue=document.querySelectorAll('a.notResolved').length;
 **peak concurrent** is the number that matters. `failed` above zero alongside a high peak is the
 signal that a queue is needed; if `failed` is 0 the whole item can be closed.
 
-Expect roughly **39** requests on a cold cache, not 94. The page holds 94 `/click` URLs but only 39
-are distinct by the cache key's fields (`sdtid`, `lno`, `trd`) - 32 keys are rendered more than once,
-because the thread renders its first post in two places. Counting raw anchors overstates the load by
-well over double, and a live browser inflates it further, since SD+ injects an `overlayUrl` child
-`<a>` into every link it has processed. Deduplicate before quoting a number. (Measured from a curl
-fetch, signed out - see §5 on why curl and a real session can differ.)
+**Do not quote a link count for this page from a raw anchor count - three effects inflate it.** The
+static HTML holds 94 `/click` URLs, but only **39** are distinct by the three query fields the cache
+key separates on (`sdtid`, `lno`, `trd`): 32 keys appear more than once, because the thread renders
+its first post in two places. In a live browser SD+ also injects an `overlayUrl` child `<a>` into
+every link it has processed, so `querySelectorAll('a[href*="/click?"]')` counts each one twice again.
+
+**39 is a floor, not the answer.** The real cache key also separates by DOM scope - post, wiki block,
+featured comment - which `test/cachekey.js` asserts, so two renderings of the same post may key
+*differently* and push the true figure back up toward 94. Settling it needs the shipped
+`getUrlId()`/`getCacheKey()` run against a real DOM, which cannot be done from a container. The
+concurrency run below reports it directly as `resolver requests:` - **take the number from that run
+and write it in here**, replacing this paragraph. (The 94/39 split was measured from a signed-out
+curl fetch; see §5 on why curl and a real session differ.)
 
 Cache clear, needed before any resolution test:
 
@@ -127,6 +126,29 @@ finished. If something looks like a loose end and is on this list, it is not.
 
 The same applies to `FORK-NOTES.md`: its *Outstanding items* table keeps finished rows struck
 through for the history. Struck through means finished.
+
+---
+
+## 1c. Confirmation log - append, do not rewrite
+
+**Add a row. Do not edit or re-word the rows above it, and do not move this into §1.** Two sessions
+once held opposite sentences about what had been tested, ten lines apart in §1, because both rewrote
+the same paragraph minutes apart - and git merged them silently, since adjacent lines never conflict.
+Test status is the fact in this file that changes fastest, so it gets the structure that survives
+concurrent editing: one row per confirmation, newest last.
+
+The standard set, referred to below as **the full set**: all eight Amazon colour variants keeping
+their own ASINs, the rei.com post link, both Timex links, the wiki block, and the three links in post
+21 of thread 19854408 resolving to three different destinations.
+
+| version | date | who | what was checked |
+|---|---|---|---|
+| through 26.11.28 | — | maxnl | the full set, on real threads |
+| 26.11.31 | Aug 2026 | maxnl | the full set — passed |
+
+26.11.31 contains 26.11.29's remembered "no destination" answer, so that change is exercised by the
+row above. A passing run does **not** retire the residual risk in §4, "the one risk worth knowing" -
+that one is about a *transient* bad answer being cached, which a passing run cannot exercise.
 
 ---
 
