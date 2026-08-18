@@ -161,7 +161,10 @@ the middle, **the full destination is not recoverable locally.**
 `u2` parameter is free and entirely local; asking the service costs a request and sends the link and
 the page URL to a third party. One switch used to govern both. Now `unwrapLinks` governs
 locally-derived destinations and `resolveLinks` governs service ones, tracked per link via
-`_hrefLocal`. Local unwrapping is tried first, so many links never reach the network at all.
+`_hrefLocal`. Local unwrapping is tried first - **but as of Aug 2026 nothing on Slickdeals carries
+`u2`, so in practice no link takes that path and every one goes to the resolver.** The separation is
+still right and the path is deliberately kept; see `MAINTAINING.md` §3a for the decision and why it
+is not dead code.
 
 **Cache management** (#7, #14, #17). Eviction on quota failure ran the iterator to exhaustion and
 then deleted `undefined`, so every pass freed nothing and recursed up to 10,000 times against an
@@ -258,11 +261,25 @@ Menu text readability (#12, #18, #20, #23), overlay containment (#22), loading c
 (#12, #20), panel growth instead of early scrolling (#26), changelog spacing (#29), and version
 label placement (#31, #34, #35).
 
+The classic panel was finished in 26.11.32-33 (#70, #71), and every fault there came from one of two
+sources. **Page CSS the category reset does not cover**: an unreadable cross-origin rule pinned
+`.changes > div` to `1em` - 12px at the panel's font size - so every changelog entry wrapped to one
+word, and `more` was pulled out of flow. The reset above `.sdp-fallbackHost .sdp-menu > ul *` covers
+color and typography, **not box metrics**. **And an event-order bug wearing CSS clothing**: clicking
+the footer closed the menu instead of expanding the changelog, because the panel is held open by
+`:focus-within` on the button and a mousedown blurs it, so the panel is `display:none` before the
+mouseup - no click is generated and the label never toggles. Suppressing the default mousedown fixed
+it. Also there: the *Changes* label now shows while collapsed (it was scoped to `:checked`, so
+nothing indicated a changelog existed), and the panel's `max-height` is measured from its real offset
+rather than a fixed `calc(100vh - 3.5rem)` that did not know where the panel started.
+
 ### Distribution
 
 - `@downloadURL` / `@updateURL` point at `releases/latest/download/Slickdeals.user.js` (#28).
 - `.github/workflows/release.yml` publishes a release on every version change, gated on `@version`
-  matching `const VERSION` and on `node --check` passing (#25).
+  matching `const VERSION`, on `node --check` passing, and - since 26.11.25 - on
+  `.github/undef-check.mjs` reporting no `no-undef` problems (#25). The job is a no-op if a release
+  for the current version already exists, so it is self-healing and cannot miss a bump.
 - Fork identity in `@name`, `@author`, the menu footer and the README (#5, #32).
 
 ---
@@ -402,8 +419,10 @@ instead of one.
 So the perturbation goes back, restricted to where the id is ambiguous by construction - `lno`
 present, `pno` absent - which is the rule 26.11.19 shipped and 26.11.20 reverted. Reading 26.11.19's
 `resolverRequest()` again: it returned the natural id whenever `pno` was present, so it never
-touched a deal body's links, and the collapse maxnl saw cannot have come from it. **The revert was
-aimed at the wrong thing, and the real cause of that collapse is still unexplained.** The one
+touched a deal body's links, and what maxnl saw - every color variant resolving to the same product
+instead of its own ASIN - cannot have come from it. **The revert was aimed at the wrong thing, and
+the cause of that regression is still unexplained.** It is fixed and has stayed fixed; only the cause
+is unknown, and an unexplained cause is not an unfixed bug - see `MAINTAINING.md` §4. The one
 explanation that fits is that the browser's markup omits `pno` where the fetched markup carries it -
 which would make this rule unsafe, and is why it is not merged without checking the browser first.
 
@@ -579,9 +598,13 @@ they point at. Measured over every saved page: 24 of 248 `/click` links have URL
 15 of those carry a display ellipsis and are unusable, and **7 are complete with a host matching
 `data-product-exitwebsite`** - resolvable with no request at all, `freetaxusa.com` among them.
 
-Deliberately not built. It would point a link at what it *says* rather than at what the resolver
-returns, and the two can differ; the host match narrows that but does not close it. Recorded as a
-decision for maxnl rather than taken quietly - which is the same reason the domain lists came out.
+**Declined by maxnl (Aug 2026), permanently.** The reason in his terms: the anchor text is not
+reliably the intended destination, and the href must not be overridden with it when it is not. There
+are various ways the two can come apart; the host match narrows that without closing it, and a cheap
+resolution that sometimes sends someone to the wrong place is worse than an unresolved link that
+still works. That it is the only route to the meta-refresh class does not reopen it - that was known
+when the call was made. **Do not re-propose this as a way to fix `freetaxusa.com`**; see
+`MAINTAINING.md` §3a.
 
 **And now the reason the resolver refuses it, which changes the case.** maxnl asked why this fails
 when Timex - also behind a referral network - worked. The difference is not the network, it is the
