@@ -38,60 +38,47 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ## 1a. Start here next session
 
-Two things are waiting, in order of value. Both need a browser; neither can be done from a
-container.
+One thing is waiting. It needs a browser; it cannot be done from a container.
 
 **1. The changelog panel renders one word per line.** Open bug, reproduced by maxnl on the classic
-layout at 26.11.30, screenshots in the session. The changelog block under **Changes** wraps every
-word onto its own line, and `more` sits beside the text instead of below it. Not diagnosable by
-reading the CSS - there are two layout paths and it is not certain which one is active. Run this with
-the menu open and **Changes expanded**:
+layout at 26.11.30. The changelog block under **Changes** wraps every word onto its own line, and
+`more` sits beside the text instead of below it.
+
+**Two traps to know before measuring, both of which cost a round here.**
+
+*The panel is focus-gated.* `.sdp-fallbackHost .sdp-menu:focus-within > ul` is the only rule that
+gives that `ul` `display: block`, so clicking into the devtools console closes the menu. A snippet
+typed at the console prompt measures a hidden element and returns zeros for every width. The
+diagnostic below therefore runs on a timer, and nothing may be clicked while it waits.
+
+*The Changes block is not version-gated.* It is built unconditionally at `initMenu()` - the footer
+reading `v<VERSION> · <FORK>` is a `<label for="sdpChanges">`, and clicking it toggles the checkbox
+that `#sdpChanges:checked ~ .changes` reveals. No downgrade is needed to see it; the footer line is
+the toggle, and it is easy to mistake for a static version label.
+
+*And the suspicion recorded here previously was wrong.* It read that `.changesLink` keeps its base
+`position:absolute` because the classic override loses. It does not lose:
+`.sdp-fallbackHost .changesLink { position: static }` is two classes and later in the file, so it
+wins wherever `.sdp-fallbackHost` is an ancestor. Look instead at whether the *containing* box is
+narrow - one word per line means a box about as wide as the longest word.
+
+Paste this, then click the Slickdeals+ button and the footer line, and touch nothing else:
 
 ```js
-const c=document.querySelector('.changes'),d=c&&c.querySelector('div'),l=document.querySelector('.changesLink');
-const g=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();
- return {w:Math.round(r.width),display:s.display,position:s.position,float:s.float,flex:s.flex};};
-console.log('fallbackHost?',!!document.querySelector('.sdp-fallbackHost'));
-console.log('ul  ',g(c.parentElement),getComputedStyle(c.parentElement).display);
-console.log('.changes',g(c)); console.log('first div',d&&g(d)); console.log('.changesLink',l&&g(l));
+(()=>{console.log("8 seconds: open the SD+ menu, click the v… footer line, then DO NOT click anything");
+setTimeout(()=>{const cb=document.getElementById("sdpChanges"); if(cb) cb.checked=true;
+ const c=document.querySelector(".changes");
+ if(!c){console.log("no .changes - menu never mounted");return;}
+ const ul=c.parentElement,d=c.querySelector("div"),l=document.querySelector(".changesLink");
+ const g=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();
+  return {w:Math.round(r.width),display:s.display,position:s.position,float:s.float,flex:s.flex};};
+ console.log("fallbackHost?",!!document.querySelector(".sdp-fallbackHost"));
+ console.log("ul display  ",getComputedStyle(ul).display,"(none = menu lost focus, rerun)");
+ console.log("ul          ",g(ul)); console.log(".changes    ",g(c));
+ console.log("first div   ",d&&g(d)); console.log(".changesLink",l&&g(l));},8000);})();
 ```
 
-One word per line means the box is about as wide as the longest word, so the widths in that output
-locate the culprit immediately. Leading suspicion: `.changesLink` is `position:absolute; right:0.8em`
-in the base CSS and the classic-layout override may not be winning, leaving the text to wrap in the
-gap beside it. **Do not fix this from the CSS by inspection** - confirm with the numbers first.
-
-**2. Concurrency.** The last genuinely unmeasured thing. Paste on a busy deal page (thread 19049776)
-*before* loading, then reload:
-
-```js
-(()=>{const f=window.fetch;let inflight=0,peak=0,n=0,fail=0;const t0=performance.now();
-window.fetch=function(...a){const u=String(a[0]&&a[0].url||a[0]);
- if(!/vano|\/26\.11\./.test(u))return f.apply(this,a);
- n++;inflight++;peak=Math.max(peak,inflight);
- return f.apply(this,a).then(r=>{inflight--;if(!r.ok)fail++;return r;})
-   .catch(e=>{inflight--;fail++;throw e;});};
-setTimeout(()=>{const blue=document.querySelectorAll('a.notResolved').length;
- console.log('resolver requests:',n,'| peak concurrent:',peak,'| failed:',fail,
-  '| still unresolved:',blue,'| elapsed:',Math.round(performance.now()-t0)+'ms');},15000);})();
-```
-
-**peak concurrent** is the number that matters. `failed` above zero alongside a high peak is the
-signal that a queue is needed; if `failed` is 0 the whole item can be closed.
-
-**Do not quote a link count for this page from a raw anchor count - three effects inflate it.** The
-static HTML holds 94 `/click` URLs, but only **39** are distinct by the three query fields the cache
-key separates on (`sdtid`, `lno`, `trd`): 32 keys appear more than once, because the thread renders
-its first post in two places. In a live browser SD+ also injects an `overlayUrl` child `<a>` into
-every link it has processed, so `querySelectorAll('a[href*="/click?"]')` counts each one twice again.
-
-**39 is a floor, not the answer.** The real cache key also separates by DOM scope - post, wiki block,
-featured comment - which `test/cachekey.js` asserts, so two renderings of the same post may key
-*differently* and push the true figure back up toward 94. Settling it needs the shipped
-`getUrlId()`/`getCacheKey()` run against a real DOM, which cannot be done from a container. The
-concurrency run below reports it directly as `resolver requests:` - **take the number from that run
-and write it in here**, replacing this paragraph. (The 94/39 split was measured from a signed-out
-curl fetch; see §5 on why curl and a real session differ.)
+**Do not fix this from the CSS by inspection** - confirm with the numbers first.
 
 Cache clear, needed before any resolution test:
 
@@ -156,6 +143,7 @@ their own ASINs, the rei.com post link, both Timex links, the wiki block, and th
 |---|---|---|---|
 | through 26.11.28 | — | maxnl | the full set, on real threads |
 | 26.11.31 | Aug 2026 | maxnl | the full set — passed |
+| 26.11.31 | Aug 2026 | maxnl | concurrency probe, thread 19049776, cold cache — 35 requests, peak 35, 0 failed |
 
 26.11.31 contains 26.11.29's remembered "no destination" answer, so that change is exercised by the
 row above. A passing run does **not** retire the residual risk in §4, "the one risk worth knowing" -
@@ -184,17 +172,22 @@ qualification.
 After the first load all of them cost nothing: destinations are cached, and so now are both terminal
 failures.
 
+**One page has since been measured live**, which is worth more than the classification above: thread
+19049776 on a cold cache issued **35** resolver requests, all of which succeeded. Static counting of
+that page's HTML suggested 94 raw `/click` URLs and 39 distinct by `sdtid`/`lno`/`trd` - so a static
+count overstated it by nearly threefold, and even the deduplicated figure was four high. Quote the
+live number, not a count of anchors.
+
 ---
 
 ## 3. Genuinely open
 
-Everything else previously listed here has been settled. All three need a browser.
+Everything else previously listed here has been settled. Both need a browser.
 
 - **Whether `unwrapLinks` ever fires anywhere.** Across every saved page - 248 `/click` links - **not
   one carries `u2`**, so the local-unwrap path never runs on anything sampled. The setting may be
   dead entirely, or `u2` may only appear on link shapes not sampled here. Do not remove it on this
   evidence alone.
-- **Concurrency.** See §1a for the command and §4 for what is known.
 - **The changelog panel rendering one word per line.** Open bug, see §1a. Not a resolver issue - a
   layout one, in the menu's own CSS.
 
@@ -244,9 +237,20 @@ id whenever `pno` was present, so it never touched a deal body's links — yet t
 The `u3` gate makes the current code safe regardless, but the cause is unknown, so watch the colours
 on the first load after any change in this area.
 
-**Unbounded concurrency.** `processLinks()` fires every request with no queue. Measured over curl the
-service serves ~4 at a time; a browser multiplexes over one HTTP/2 connection and may not trip it at
-all. Deliberately not acted on — measure from a browser first, with the command in §1a.
+**Unbounded concurrency: measured, and it is fine.** `processLinks()` fires every request with no
+queue. Measured by maxnl in a browser on thread 19049776 (Aug 2026, 26.11.31, cold cache): **35
+resolver requests, peak 35 concurrent, 0 failed** in 15s. Peak equalling the total means all 35 went
+out in one burst, exactly as the no-queue reading predicted - and the service served every one. The
+earlier "~4 at a time" figure came from curl; a browser multiplexes over one HTTP/2 connection and
+does not trip the limit. **No queue is needed, and none should be added without a fresh measurement
+showing failures.**
+
+One link stayed unresolved on that run, which is the expected count: `freetaxusa.com` is the known
+meta-refresh case above and cannot resolve. Worth re-checking if that number is ever above 1.
+
+Caveat: one run, one page, one moment. It closes the item on the agreed criterion (`failed` of 0),
+but a rate-limit change upstream would not announce itself - the probe in this file's history can be
+re-run if links ever start staying blue.
 
 Failure is graceful, and this was re-checked when the negative cache went in. A rate-limited or failed
 request never reaches the branch that records a failure: `resolveUrl()` catches network errors to
