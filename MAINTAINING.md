@@ -115,7 +115,7 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | Concurrency, whether a request queue is needed | Measured Aug 2026: 35 requests, peak 35, 0 failed - no |
 | README screenshot of the menu | **Done** - `docs/classic-menu.png` and `docs/menu.png`, both in the README |
 | Documenting the menu options for users | **Done** - the options table in the README |
-| The resolver hostname appearing in plain text | **Done** - removed from every tracked file |
+| The resolver hostname appearing in plain text | Removed from every tracked file - **but still in git history**, see §3a |
 | Stale claude/* branches | **Done** - deleted by maxnl |
 | `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
 
@@ -230,6 +230,19 @@ gap, because the reason is usually the thing you were about to rediscover.
   a reply all holding the identical URL and anchor text, asserted to key differently and stably.
 - **The resolver's address stays out of this repo.** The script assembles it at runtime from the
   encoded string at the foot of the file. Decode that when you need it.
+- **It is still in git history, and that is worth knowing before anyone claims otherwise.** It was
+  written in plain text in the notes, then redacted in `4ca443c`. Redacting the working copy does not
+  remove it from the commits that carried it: **60 of 297 commits still contain it, all reachable from
+  `master`**, so a clone retrieves it and GitHub serves it. §1b's row means "not in any file you will
+  open", not "gone".
+
+  Whether to rewrite history for this is **maxnl's call and has not been taken.** The honest trade:
+  a rewrite drops it from fresh clones and from casual discovery through the GitHub UI and `git log
+  -S`, which is a real reduction. It does not undo publication - unreachable objects stay fetchable by
+  SHA, forks and existing clones keep it, and anything that indexed the repo already has it - and it
+  breaks every clone in exchange. The purpose was never secrecy so much as not pointing traffic at
+  someone else's server from a file GitHub indexes, and that purpose is largely served by the current
+  state. **Do not rewrite without deciding this deliberately**, and do not describe it as removed.
 - **Nothing on Slickdeals can be unwrapped any more; it all requires resolving** (maxnl, Aug 2026).
   This is a call about the site, not a sampling result, and it outranks the sampling: no `u2` was found
   across 248 saved links or on a live thread page, but a zero count could never have proved the shape
