@@ -13,11 +13,8 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.31**.
-
-**What has and has not been confirmed in a browser matters here.** Everything through **26.11.28** was
-checked by maxnl on real threads. **26.11.29 and 26.11.31 have not been.** Do not read the list below
-as covering them.
+Released and current: **v26.11.31**, and browser-tested by maxnl (Aug 2026) against the full set
+below — it passed.
 
 | version | state |
 | --- | --- |
@@ -30,14 +27,13 @@ as covering them.
 | 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
 | 26.11.31 | **current** - guards the two latent CSS traps; no behaviour change |
 
-Confirmed in a browser, at 26.11.28 or earlier: all eight Amazon colour variants keep their own
-ASINs, the rei.com post link resolves, both Timex links resolve, the wiki block resolves, and the
-three links in post 21 of thread 19854408 resolve to three different destinations.
+Confirmed in a browser: all eight Amazon colour variants keep their own ASINs, the rei.com post link
+resolves, both Timex links resolve, the wiki block resolves, and the three links in post 21 of thread
+19854408 resolve to three different destinations.
 
-**26.11.31 was browser-tested against all of those by maxnl (Aug 2026) and passed.** That build
-contains 26.11.29's remembered "no destination" answer, so that change is exercised too - but a
-passing run does not retire the residual risk in §4, "the one risk worth knowing", which is about a
-*transient* bad answer being cached rather than a steady-state wrong one.
+That build contains 26.11.29's remembered "no destination" answer, so that change is exercised too -
+but a passing run does **not** retire the residual risk in §4, "the one risk worth knowing", which is
+about a *transient* bad answer being cached rather than a steady-state wrong one.
 
 **Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
 is remembered as failed for a week:
@@ -73,8 +69,8 @@ locate the culprit immediately. Leading suspicion: `.changesLink` is `position:a
 in the base CSS and the classic-layout override may not be winning, leaving the text to wrap in the
 gap beside it. **Do not fix this from the CSS by inspection** - confirm with the numbers first.
 
-**2. Concurrency.** The last genuinely unmeasured thing. Paste on a busy deal page (thread 19049776
-has 46+ links) *before* loading, then reload:
+**2. Concurrency.** The last genuinely unmeasured thing. Paste on a busy deal page (thread 19049776 -
+**39 links distinct by cache key**) *before* loading, then reload:
 
 ```js
 (()=>{const f=window.fetch;let inflight=0,peak=0,n=0,fail=0;const t0=performance.now();
@@ -90,6 +86,13 @@ setTimeout(()=>{const blue=document.querySelectorAll('a.notResolved').length;
 
 **peak concurrent** is the number that matters. `failed` above zero alongside a high peak is the
 signal that a queue is needed; if `failed` is 0 the whole item can be closed.
+
+Expect roughly **39** requests on a cold cache, not 94. The page holds 94 `/click` URLs but only 39
+are distinct by the cache key's fields (`sdtid`, `lno`, `trd`) - 32 keys are rendered more than once,
+because the thread renders its first post in two places. Counting raw anchors overstates the load by
+well over double, and a live browser inflates it further, since SD+ injects an `overlayUrl` child
+`<a>` into every link it has processed. Deduplicate before quoting a number. (Measured from a curl
+fetch, signed out - see §5 on why curl and a real session can differ.)
 
 Cache clear, needed before any resolution test:
 
