@@ -106,6 +106,12 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 This list exists because a second assistant, reading these notes cold, proposed work that was already
 finished. If something looks like a loose end and is on this list, it is not.
 
+**Not the same list as §1c, and the two must not be merged.** This one records what is *done* - built,
+shipped, settled. §1c records what has been *verified* - run in a browser, on a date, by someone. A
+thing can be done and unverified, which is the ordinary state of a fresh release, and collapsing the
+two loses exactly the distinction that produced the §1 contradiction: one session read "26.11.31
+shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
+
 | | |
 |---|---|
 | The 26.11.13 regression (colour variants, then 4 links in 5) | Fixed in 26.11.14 |
@@ -136,6 +142,11 @@ once held opposite sentences about what had been tested, ten lines apart in §1,
 the same paragraph minutes apart - and git merged them silently, since adjacent lines never conflict.
 Test status is the fact in this file that changes fastest, so it gets the structure that survives
 concurrent editing: one row per confirmation, newest last.
+
+**Not the same list as §1b, and the two must not be merged.** §1b is what is *done*; this is what has
+been *verified*, by whom and when. Both are append-only and they sit next to each other, so a later
+tidy-up will read them as redundant - they are not. A release is done the moment it ships and
+verified only when someone runs it.
 
 The standard set, referred to below as **the full set**: all eight Amazon colour variants keeping
 their own ASINs, the rei.com post link, both Timex links, the wiki block, and the three links in post
