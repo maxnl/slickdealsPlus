@@ -2037,7 +2037,7 @@ const processLinks = (node, force) =>
 		const urlObject = new URL(elLink.href);
 		/* Two keys, deliberately. `id` is what the resolver is addressed with and
 		 * what its response is XOR'd with, so it has to be the shape the service
-		 * recognises. `key` is ours: it is collision-free per link, which `id` is
+		 * recognizes. `key` is ours: it is collision-free per link, which `id` is
 		 * not, and it is what the local cache and the link grouping use. */
 		const id = getUrlId(urlObject);
 		if (!id)
@@ -2462,7 +2462,7 @@ const updateLinks = () =>
  *
  * 1. THE RESOLVER ID IS NOT OURS TO CHOOSE.
  *    getUrlId() concatenates `<value><param>` over pno, sdtid, tid, pcoid, lno.
- *    The service only recognises that shape, and it also checks that the id
+ *    The service only recognizes that shape, and it also checks that the id
  *    agrees with the URL sent beside it - a disagreeing pair is refused with
  *    error 7.122. So the id cannot encode the URL, cannot be a hash, and cannot
  *    be made unique by fiat. The only way to change the id is to change the URL
@@ -2550,7 +2550,7 @@ const getUrlId = (() =>
 		}
 		/* This value is not ours to choose. It is sent to the resolver as a path
 		 * segment and is the key the response is XOR'd with, and the service only
-		 * recognises ids in this exact shape - measured: the upstream id returns
+		 * recognizes ids in this exact shape - measured: the upstream id returns
 		 * 200 with a body, while a differently-derived id for the same link and
 		 * the same version returns 404 with error 7.122. Redefining it, as an
 		 * earlier change did to make it collision-free, silently broke every
@@ -2759,7 +2759,7 @@ const resolveFinalHop = (urlObject, key) =>
 	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
 	const idFresh = getUrlId(urlFresh);
 	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
-	 * link, and the service does not recognise those. */
+	 * link, and the service does not recognize those. */
 	if (!idFresh || /crc$/.test(idFresh))
 		return Promise.resolve("");
 
@@ -2829,7 +2829,7 @@ const askFor = (urlObject, key, id) =>
 	urlFresh.searchParams.set("lno", key.replace(/\D/g, "") || "0");
 	const idFresh = getUrlId(urlFresh);
 	/* getUrlId() falls back to a crc id when nothing but `lno` identifies the
-	 * link, and the service does not recognise those. */
+	 * link, and the service does not recognize those. */
 	if (!idFresh || /crc$/.test(idFresh))
 		return {id: id, url: urlObject.href, unique: false};
 
@@ -3084,7 +3084,7 @@ const init = () =>
 		processLinks(elPageContent);
 	}
 	/* Score highlighting otherwise only runs from processCards(), i.e. only for
-	 * cards whose price element was recognised. On the classic layout the vote
+	 * cards whose price element was recognized. On the classic layout the vote
 	 * count is readable even when the price markup is not, so drive it once
 	 * directly rather than making it a hostage of price parsing. */
 	highlightCards();
