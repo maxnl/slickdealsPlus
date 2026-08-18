@@ -348,6 +348,11 @@ sed -n '/^})(`/,$p' 'Slickdeals+.user.js' | grep -c '`\|\${'      # must print 2
 node test/unit.js && node test/cachekey.js && node test/answers.js && node test/stability.js
 ```
 
+- **A green run says nothing about the menu, the CSS, card processing or ad blocking.** The harnesses
+  extract ten resolver-side functions and touch none of that - there is no DOM here. Both 26.11.32
+  and 26.11.33 were menu fixes, and every gate above passed on the broken builds; a browser caught
+  them. Anything outside link resolution is unverified until someone loads a page. See
+  `test/README.md`.
 - `@version` and `const VERSION` must agree, or the release workflow fails. `VERSION` is also a path
   segment in the resolver URL: bump it, never change its shape.
 - **A harness must call the shipped function, not a copy of it.** The 26.11.23 suite re-implemented
