@@ -1473,6 +1473,18 @@ const initMenu = elNav =>
 		elFooter.dataset[dataset] = "";
 
 
+	/* The panel is held open by :focus-within on the menu, and the focused element
+	 * is the button. A mousedown here blurs it, which makes the panel display:none
+	 * mid-gesture - so the mouseup lands on nothing, no click is ever generated,
+	 * and the label never toggles its checkbox. The menu closed and the changelog
+	 * stayed collapsed, which is why clicking Changes appeared to do nothing at
+	 * all. The other rows escape this only because they are anchors, which take
+	 * focus on mousedown and so keep it inside the panel.
+	 *
+	 * Suppressing the default mousedown keeps focus on the button, so the panel
+	 * survives the gesture and the click arrives normally. */
+	elFooter.addEventListener("mousedown", evt => evt.preventDefault(), false);
+
 	const elFooterCheckbox = document.createElement("input");
 	elFooterCheckbox.id = "sdpChanges";
 	elFooterCheckbox.type = "checkbox";
