@@ -55,7 +55,7 @@ decided, and the reason is recorded next to them.
 
 ### What has already been reviewed, and how (Aug 2026)
 
-Nine review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
+Ten review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
 question the previous one could not, and re-reading for consistency will now find nothing:
 
 | pass | question it asked | outcome |
@@ -69,6 +69,7 @@ question the previous one could not, and re-reading for consistency will now fin
 | 8 | is the CI tooling itself sound, and do the documented commands survive the rewrite? | **two blind spots in the `no-undef` gate, both fixed** - it reported clean when ESLint could not parse the file, and when handed a path outside the project root. The documented diff-since-`v26.11.31` command still returns the same answer from a fresh clone, stale tags notwithstanding |
 | 9 | does what users actually install match what is in `master`? | **the pipeline is faithful** - the published `Slickdeals.user.js` hashes exactly to the script at the `v26.11.34` tag. `master` carries one later commit-only-in-comments, see §5. The menu options in the README were checked against every `createMenuItem` call and are complete and in the right order; `@match`, `@updateURL` and the asset name all line up |
 | 9 | did the history rewrite actually take effect for someone cloning today? | **no, until the tags were fixed** - 34 tags still pointed at pre-rewrite commits, which a plain `git clone` fetches. Closed the same day via an Actions runner; re-verified by cloning fresh - 315 commits, no pre-rewrite SHAs |
+| 10 | is the CSS machine-checkable, and does it hold up? | **no defects, and now it has been looked at.** 1433 lines / 42187 characters parse with **zero errors**; every declaration validates; all three `sdp-`-prefixed classes are wired to the JS. One latent risk found and recorded in `FORK-NOTES.md`: three colors depend on *site*-defined CSS variables with no fallback |
 
 **Still unaudited:** roughly 1,000 lines - the `SETTINGS` proxy layer, `fixCSS()`'s selector
 resolution, and `noAds`'s DOM-insertion interception. Nothing suggests a problem there; it simply has
@@ -495,6 +496,22 @@ node test/unit.js && node test/cachekey.js && node test/answers.js && node test/
   the behavior before the version is bumped. Where a change *cannot* be seen - 26.11.34's guards do
   nothing unless they fire - say so plainly rather than implying it was confirmed, and record it in
   §1b rather than §1c.
+- **`npm install --no-save X` replaces the tree, it does not add to it.** There is no `package.json`
+  and no lockfile here on purpose, so npm has no manifest to reconcile against: installing `css-tree`
+  during pass 10 silently removed `eslint`, and the next gate run failed with `ERR_MODULE_NOT_FOUND`
+  rather than with a lint error. That reads like a broken gate and is not one. Re-run the §5 install
+  line after installing anything else.
+- **The CSS is machine-checkable, and was checked in Aug 2026 with zero findings.** It is one static
+  template literal with no `${}` interpolation, so a parser can read it whole. This is not a release
+  gate - it would add a dependency to catch a class that has never occurred, while the backtick count
+  above already protects the literal's integrity - but it is worth re-running after a large CSS edit:
+
+  ```sh
+  npm install --no-save css-tree   # then re-run the §5 eslint install, see above
+  node -e 'const fs=require("fs"),c=require("css-tree"),s=fs.readFileSync("Slickdeals+.user.js","utf8"),
+    a=s.indexOf("})(`")+4;let b=-1;for(let i=a;i<s.length;i++){if(s[i]==="`"&&s[i-1]!=="\\"){b=i;break}}
+    const e=[];c.parse(s.slice(a,b),{positions:true,onParseError:x=>e.push(x)});console.log("errors:",e.length)'
+  ```
 - **A green run says nothing about the menu, the CSS, card processing or ad blocking.** The harnesses
   extract ten resolver-side functions and touch none of that - there is no DOM here. Both 26.11.32
   and 26.11.33 were menu fixes, and every gate above passed on the broken builds; a browser caught
@@ -603,6 +620,16 @@ obfuscated it deliberately. Decode that argument when you need the hostname.
 - **Error codes:** `1.30` missing Origin/Referer. `7.122` id disagrees with the submitted URL.
 - It rate-limits by concurrency, not volume. Space probes ~2s apart.
 - `slickdeals.net` resets headless Chromium but serves `curl` with a browser user-agent.
+- **Node here is not the Node that CI uses, deliberately.** The workflow pins `actions/setup-node@v7`
+  to **24**, which is Active LTS; this container currently runs 22. That gap is the reason the pin
+  exists rather than an oversight, but it does mean `node --check` can accept something here that CI
+  rejects, or the reverse. Check a syntax question against the version in `release.yml`, not against
+  `node --version` in the shell.
+- **The environment's git proxy permits pushes but not every kind of ref write, and it fails the same
+  way each time: HTTP 403.** Branch deletion is one case, tag writes are another - see §3a, where a
+  403 on `refs/tags/*` left the history rewrite looking finished when it was not. Treat a 403 from
+  git here as "this ref operation is not permitted", not as a network problem, and check whether an
+  Actions runner can do it instead: its `GITHUB_TOKEN` with `contents: write` can.
 - **Branch deletion is not possible from here.** `git push origin --delete <branch>` returns HTTP 403
   through the environment's git proxy, which permits pushes but not ref deletion, and the GitHub tools
   available expose `create_branch` with no delete counterpart. Merged branches have to be removed by
