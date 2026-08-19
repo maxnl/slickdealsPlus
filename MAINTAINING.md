@@ -47,10 +47,12 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ## 1a. Start here next session
 
-**Nothing is blocked, nothing is half-finished, and §3 is empty.** The classic-layout menu work
-closed out in 26.11.33 and `unwrapLinks` was settled - it is in §3a with the reasoning, not in §3.
-Before adding anything to §3, check §1b and §3a: most things that look like gaps here have already
-been decided, and the reason is recorded next to them.
+**One thing is half-finished, and it is the only entry in §3: the 34 release tags on the remote
+still point at pre-rewrite commits**, because this environment's credentials cannot write
+`refs/tags/*`. Read §3 before touching anything to do with the history rewrite. The code is not
+affected - the classic-layout menu work closed out in 26.11.33 and `unwrapLinks` was settled, in §3a
+with the reasoning. Before adding anything else to §3, check §1b and §3a: most things that look like
+gaps here have already been decided, and the reason is recorded next to them.
 
 ### What has already been reviewed, and how (Aug 2026)
 
@@ -60,7 +62,7 @@ question the previous one could not, and re-reading for consistency will now fin
 | pass | question it asked | outcome |
 |---|---|---|
 | 1-3 | is the documentation internally consistent? | 15 fixes; the last found a heading that contradicted §3 |
-| 4 | are these claims true *outside* `HEAD`? | the resolver host is in 60 commits of history - §3a |
+| 4 | are these claims true *outside* `HEAD`? | the resolver host was in 60 commits of history - rewritten since, §3a |
 | 4 | would the harnesses fail if the code were wrong? | yes - four mutations, all caught; `test/README.md` |
 | 5 | does the code actually work? | four `$$` dereference sites, two unguarded - fixed in 26.11.34 |
 | 6 | what holds the invariants up? | the cache-key contract rests on `crc32`, not on the `0 +` that looks like it - `FORK-NOTES.md` |
@@ -135,7 +137,7 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | Concurrency, whether a request queue is needed | Measured Aug 2026: 35 requests, peak 35, 0 failed - no |
 | README screenshot of the menu | **Done** - `docs/classic-menu.png` and `docs/menu.png`, both in the README |
 | Documenting the menu options for users | **Done** - the options table in the README |
-| The resolver hostname appearing in plain text | Removed from every tracked file - **but still in git history**, see §3a |
+| The resolver hostname appearing in plain text | Removed from every tracked file, and history rewritten Aug 2026 - **but the 34 release tags on the remote still point at pre-rewrite commits**, see §3a |
 | Stale claude/* branches | **Done** - deleted by maxnl |
 | `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
 
@@ -146,10 +148,13 @@ table is open work - it is that file's counterpart to §4 below, not to §3.
 **On the `node_modules` row, since the obvious follow-up is "shouldn't we purge it from history?" -
 no, and that is measured.** The pre-ship `npm install --no-save eslint globals` in §5 writes
 `node_modules` into the working tree, and a `git add -A` committed it: 1114 files, 13MB, 98% of the
-repo. It is untracked now and `.gitignore` stops a recurrence. The blobs remain in history, and a
-fresh clone over the wire costs **2.9 MiB packed** against a 464 KB working tree - so they add about
-2.5 MB, once, and compress well. Rewriting `master` would break every existing clone to recover less
-than the two screenshots weigh.
+repo. It is untracked now and `.gitignore` stops a recurrence. The blobs remain in history - the
+Aug 2026 rewrite replaced text only, so all 1114 paths came through it - and a fresh clone over the
+wire cost **2.9 MiB packed** against a 464 KB working tree, so they add about 2.5 MB, once, and
+compress well. That is less than the two screenshots weigh, and it was not worth widening the
+rewrite's blast radius to recover. Note that the "it would break every clone" half of this argument
+has since been spent on the hostname rewrite; what is left is simply that 2.5 MB is not worth a
+second rewrite.
 
 Measure this correctly if it is ever revisited: a local `git clone` of this repo reports ~9 MB
 because it hardlinks loose objects instead of repacking, and `du -sh .git` is misleading for the same
@@ -181,6 +186,7 @@ their own ASINs, the rei.com post link, both Timex links, the wiki block, and th
 | 26.11.31 | Aug 2026 | maxnl | concurrency probe, thread 19049776, cold cache — 35 requests, peak 35, 0 failed |
 | 26.11.32 | Aug 2026 | maxnl | changelog width fix, classic layout — entry went 29px to 240px, wraps normally |
 | 26.11.33 | Aug 2026 | maxnl | Changes toggles and the menu stays open; label visible collapsed; more below the text; panel fits |
+| 26.11.34 | Aug 2026 | Claude | post-rewrite content check - `Slickdeals+.user.js`, `MAINTAINING.md`, `FORK-NOTES.md`, `README.md` byte-identical across the rewrite; all five §5 gates pass; not a browser test |
 
 **Does a release need re-testing against the full set? Check, do not guess.** Everything shipped
 after 26.11.31 - 26.11.32, .33 and .34 - is menu, CSS and guards; **link resolution is untouched**.
@@ -242,10 +248,21 @@ live number, not a count of anchors.
 
 ## 3. Genuinely open
 
-Everything here has been settled. `unwrapLinks` was the last entry; it moved to §3a in Aug 2026 and
-the decision it was waiting on has been taken - the path stays.
+One entry, opened Aug 2026 by the history rewrite. `unwrapLinks` was the previous one; it moved to
+§3a and the decision it was waiting on has been taken - the path stays.
 
-- *(nothing currently open)*
+- **The 34 release tags on the remote still point at pre-rewrite commits.** The rewrite that stripped
+  the resolver hostname reached `master` and the working branch but not `refs/tags/*`: the automation
+  environment's git credentials are refused with `HTTP 403` on any tag write, including creating an
+  unrelated throwaway tag, so this is a credential scope limit, not a transient failure and not
+  something a retry fixes. Because `git clone` fetches tags by default, **the old history is still
+  reachable from a fresh clone through them**, which is most of what the rewrite was meant to prevent.
+
+  Finishing it needs credentials that can write `refs/tags/*` - maxnl's own machine, or a token with
+  `contents: write` - and then `git push --force --tags origin` from a clone of the rewritten history.
+  Deleting the tags instead would detach the 34 GitHub Releases from their commits, so repointing is
+  the right move, not deletion. Until then, do not describe the rewrite as complete on the remote;
+  §3a's entry states the same limit and should stay in step with this one.
 
 ---
 
@@ -273,19 +290,30 @@ gap, because the reason is usually the thing you were about to rediscover.
   a reply all holding the identical URL and anchor text, asserted to key differently and stably.
 - **The resolver's address stays out of this repo.** The script assembles it at runtime from the
   encoded string at the foot of the file. Decode that when you need it.
-- **It is still in git history, and that is worth knowing before anyone claims otherwise.** It was
-  written in plain text in the notes, then redacted in `4ca443c`. Redacting the working copy does not
-  remove it from the commits that carried it: **60 of 297 commits still contain it, all reachable from
-  `master`**, so a clone retrieves it and GitHub serves it. §1b's row means "not in any file you will
-  open", not "gone".
+- **History was rewritten to strip it (maxnl, Aug 2026), and the result is partial - read the whole
+  of this before repeating any claim about it.** It had been written in plain text in the notes and
+  then merely redacted in the working copy (`1fc5671`), which left **60 of 297 commits carrying it,
+  all reachable from `master`**. `git filter-repo --replace-text` rewrote all 311 commits; the 60 now
+  carry a redaction marker instead. Current file content came through byte-identical - `Slickdeals+.user.js`,
+  `MAINTAINING.md`, `FORK-NOTES.md` and `README.md` all hash the same before and after - and authorship
+  was preserved (V@no 85 + 2, maxnl 93, Claude 131). Every SHA before the fork point changed, so old
+  commit references in notes or issues no longer resolve; the fork point itself is now `95d2d25`.
 
-  Whether to rewrite history for this is **maxnl's call and has not been taken.** The honest trade:
-  a rewrite drops it from fresh clones and from casual discovery through the GitHub UI and `git log
-  -S`, which is a real reduction. It does not undo publication - unreachable objects stay fetchable by
-  SHA, forks and existing clones keep it, and anything that indexed the repo already has it - and it
-  breaks every clone in exchange. The purpose was never secrecy so much as not pointing traffic at
-  someone else's server from a file GitHub indexes, and that purpose is largely served by the current
-  state. **Do not rewrite without deciding this deliberately**, and do not describe it as removed.
+  **`master` and the working branch were force-pushed. The 34 release tags were not** - this
+  environment's git credentials are refused (`HTTP 403`) on any write to `refs/tags/*`, including
+  creating an unrelated throwaway tag, so it is a credential scope limit and not something retrying
+  fixes. Every tag on the remote still points at its pre-rewrite commit, **and `git clone` fetches tags
+  by default, so a fresh clone still retrieves the old history through them.** Until the tags are
+  repointed or deleted by someone whose credentials can write `refs/tags/*`, treat the rewrite as
+  *incomplete on the remote*: the branches are clean, the tags are not.
+
+  **A rewrite is not erasure even once the tags are done.** The repo is public and sits in vanowm's
+  fork network (`forks: 0`, `network_count: 2`), which shares an object store, so unreachable objects
+  stay fetchable by SHA until GitHub garbage-collects - generally requiring GitHub Support. Existing
+  clones keep it, and anything that already indexed the repo already has it. What the rewrite buys is
+  removal from every file, branch and fresh clone, and from casual discovery through the GitHub UI and
+  `git log -S`. That was always the actual purpose - not secrecy, but not pointing traffic at someone
+  else's server from a file GitHub indexes. **Do not describe it as removed.**
 - **Nothing on Slickdeals can be unwrapped any more; it all requires resolving** (maxnl, Aug 2026).
   This is a call about the site, not a sampling result, and it outranks the sampling: no `u2` was found
   across 248 saved links or on a live thread page, but a zero count could never have proved the shape
