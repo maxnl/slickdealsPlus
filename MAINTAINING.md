@@ -52,7 +52,25 @@ closed out in 26.11.33 and `unwrapLinks` was settled - it is in §3a with the re
 Before adding anything to §3, check §1b and §3a: most things that look like gaps here have already
 been decided, and the reason is recorded next to them.
 
-The reusable part of the last session was the method, not the findings:
+### What has already been reviewed, and how (Aug 2026)
+
+Seven review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
+question the previous one could not, and re-reading for consistency will now find nothing:
+
+| pass | question it asked | outcome |
+|---|---|---|
+| 1-3 | is the documentation internally consistent? | 15 fixes; the last found a heading that contradicted §3 |
+| 4 | are these claims true *outside* `HEAD`? | the resolver host is in 60 commits of history - §3a |
+| 4 | would the harnesses fail if the code were wrong? | yes - four mutations, all caught; `test/README.md` |
+| 5 | does the code actually work? | four `$$` dereference sites, two unguarded - fixed in 26.11.34 |
+| 6 | what holds the invariants up? | the cache-key contract rests on `crc32`, not on the `0 +` that looks like it - `FORK-NOTES.md` |
+| 7 | `processCards`, the ad lists, `parseVotes` | **no defects.** 42 blocklist regexes checked for stateful flags (none), `parseVotes` verified against all 13 documented behaviors |
+
+**Still unaudited:** roughly 1,000 lines - the `SETTINGS` proxy layer, `fixCSS()`'s selector
+resolution, and `noAds`'s DOM-insertion interception. Nothing suggests a problem there; it simply has
+not been read line by line.
+
+The methods worth reusing, from the sessions that produced the above:
 
 **Measure the panel by forcing it open, never by asking a human to click.** The panel is held open by
 `:focus-within`, so clicking into the devtools console closes it and every width reads 0. Two
@@ -107,6 +125,7 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | A "no destination" answer re-asked every load | Fixed in 26.11.29 |
 | Dead code left by 26.11.28 (`resolveNatural`) | Removed in 26.11.30 |
 | `fixCSS()` / `highlightCards()` latent traps | Guarded in 26.11.31 |
+| The other two `$$` dereferences (`setColors.update()`, `updateLinks()`) | Guarded in 26.11.34; all four sites now covered, see §4 |
 | The changelog wrapping to one word per line | Fixed in 26.11.32, confirmed in a browser |
 | Clicking Changes closing the menu, changelog unreachable | Fixed in 26.11.33, confirmed |
 | No sign a changelog existed when collapsed | Fixed in 26.11.33 - the Changes label always shows |
@@ -162,6 +181,10 @@ their own ASINs, the rei.com post link, both Timex links, the wiki block, and th
 | 26.11.31 | Aug 2026 | maxnl | concurrency probe, thread 19049776, cold cache — 35 requests, peak 35, 0 failed |
 | 26.11.32 | Aug 2026 | maxnl | changelog width fix, classic layout — entry went 29px to 240px, wraps normally |
 | 26.11.33 | Aug 2026 | maxnl | Changes toggles and the menu stays open; label visible collapsed; more below the text; panel fits |
+
+**26.11.34 is deliberately not in this table.** It adds two defensive guards and changes nothing
+unless one fires, so there is no observable behavior for a browser to confirm - only that nothing
+regressed. Absence here means unverifiable, not unverified; it is recorded as done in §1b.
 
 26.11.31 contains 26.11.29's remembered "no destination" answer, so that change is exercised by the
 row above. A passing run does **not** retire the residual risk in §4, "the one risk worth knowing" -
