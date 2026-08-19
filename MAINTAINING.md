@@ -350,8 +350,32 @@ One link stayed unresolved on that run, which is the expected count: `freetaxusa
 meta-refresh case above and cannot resolve. Worth re-checking if that number is ever above 1.
 
 Caveat: one run, one page, one moment. It closes the item on the agreed criterion (`failed` of 0),
-but a rate-limit change upstream would not announce itself - the probe in this file's history can be
-re-run if links ever start staying blue.
+but a rate-limit change upstream would not announce itself. **Re-run this if links ever start staying
+blue.** It has to be installed before the page loads - a console paste is wiped by the reload - so it
+goes in a userscript manager as a second script with `@run-at document-start` and `@grant none`
+(without `@grant none` it runs in an isolated world and the `fetch` override never reaches the page).
+Then clear the link cache, reload, and read the console after 15s:
+
+```js
+(() => {
+  const f = window.fetch;
+  let inflight = 0, peak = 0, n = 0, fail = 0;
+  const t0 = performance.now();
+  window.fetch = function (...a) {
+    const u = String((a[0] && a[0].url) || a[0]);
+    if (!/vano|\/26\.11\./.test(u)) return f.apply(this, a);
+    n++; inflight++; peak = Math.max(peak, inflight);
+    return f.apply(this, a)
+      .then(r => { inflight--; if (!r.ok) fail++; return r; })
+      .catch(e => { inflight--; fail++; throw e; });
+  };
+  setTimeout(() => console.log("requests", n, "| peak", peak, "| failed", fail,
+    "| still blue", document.querySelectorAll("a.notResolved").length), 15000);
+})();
+```
+
+`peak` is the number that matters; `failed` above zero alongside a high peak is what would justify a
+queue. Disable the probe afterwards - it hooks `fetch` on every thread page.
 
 Failure is graceful, and this was re-checked when the negative cache went in. A rate-limited or failed
 request never reaches the branch that records a failure: `resolveUrl()` catches network errors to
@@ -405,6 +429,25 @@ sed -n '/^})(`/,$p' 'Slickdeals+.user.js' | grep -c '`\|\${'      # must print 2
 node test/unit.js && node test/cachekey.js && node test/answers.js && node test/stability.js
 ```
 
+- **Verify anything the gates cannot cover *before* merging, by injecting it into a live page.**
+  Merging publishes: the release workflow fires on a push to `master`, so there is no window between
+  merge and release in which to check. Both 26.11.32 and 26.11.33 were confirmed this way, and it is
+  what caught the gap between "measured" and "actually right" - 26.11.32's fix was reasoned from a
+  computed width and still needed seeing.
+
+  The pattern: put the exact rules the release would ship into the page, exercise the thing, and read
+  a number rather than trusting the look of it.
+
+  ```js
+  document.head.insertAdjacentHTML("beforeend",
+    "<style>.sdp-fallbackHost .changes > div{width:auto !important}</style>");
+  // then force the panel open and measure - see §1a - rather than eyeballing it
+  ```
+
+  For a JS change, attach the listener by hand the same way (`el.addEventListener(...)`) and confirm
+  the behavior before the version is bumped. Where a change *cannot* be seen - 26.11.34's guards do
+  nothing unless they fire - say so plainly rather than implying it was confirmed, and record it in
+  §1b rather than §1c.
 - **A green run says nothing about the menu, the CSS, card processing or ad blocking.** The harnesses
   extract ten resolver-side functions and touch none of that - there is no DOM here. Both 26.11.32
   and 26.11.33 were menu fixes, and every gate above passed on the broken builds; a browser caught
@@ -443,6 +486,38 @@ the user's view, and the difference has been load-bearing here repeatedly:
 
 The cost is asymmetric: asking costs one turn, assuming costs a wrong conclusion that then has to be
 found and retracted. When the answer would change what gets built, ask before building.
+
+---
+
+## 5b. House style, and working with more than one session
+
+**American spelling throughout** (maxnl, Aug 2026) - `color`, `behavior`, `license`, `normalize`. It
+took three passes to clear the British forms out of the docs, the script's comments and `test/*.js`,
+so please do not reintroduce them. Check with:
+
+```sh
+grep -rniE 'colour|behaviour|neighbour|licence|normalis|optimis|defence|recognise|centre|grey' \
+  *.md test/*.md test/*.js 'Slickdeals+.user.js' .github/*.mjs
+```
+
+**Say what happened, not a dramatic shorthand for it.** The 26.11.19 regression was written up for
+months as "the color collapse", which maxnl objected to and which overstated it - what happened is
+that color variants stopped resolving to their own destinations. Precise beats vivid here.
+
+**One session owns this file at a time.** Two ran concurrently in Aug 2026 and both rewrote §1
+minutes apart; git merged them without a conflict, because they touched adjacent lines rather than
+the same ones, and the result asserted that a version both had and had not been browser-confirmed.
+Neither edit was wrong on its own.
+
+So, when more than one session is live:
+
+- **Fetch and re-read `master` immediately before editing this file**, never work from a snapshot
+  taken earlier in the session. The collision above spanned about ten minutes.
+- Prefer appending to §1b and §1c over rewriting anything.
+- Say out loud which session is taking a change. Both sessions once deferred to the other and neither
+  moved; that costs less than both moving, but it still costs.
+- Only one of them should push. A second session that has "already discarded its local fix" is the
+  safe state to be in.
 
 ---
 
