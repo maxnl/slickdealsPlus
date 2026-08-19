@@ -5,9 +5,9 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 
 | | |
 |---|---|
-| Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
+| Forked from | `95d2d25`, 2025-07-19, upstream **v25.7.18** |
 | Current | **v26.11.34** |
-| Diff since fork | `git diff --numstat b2c6ac8 HEAD -- 'Slickdeals+.user.js'` — about +1600 / −75 at 26.11.33 |
+| Diff since fork | `git diff --numstat 95d2d25 HEAD -- 'Slickdeals+.user.js'` — +1626 / −82 at 26.11.34 |
 | Files added | `.gitignore`, `.github/workflows/release.yml`, `.github/undef-check.mjs`, `MAINTAINING.md`, this file, `docs/` (2 screenshots), `test/` (5 harnesses + README) |
 | Files deleted | `CNAME`, `CHANGES.html` |
 

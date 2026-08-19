@@ -6,3 +6,6 @@ package-lock.json
 
 # Scratch output from probes and harness runs
 *.log
+
+# Local Claude Code settings (personal, not team-wide)
+.claude/settings.local.json
