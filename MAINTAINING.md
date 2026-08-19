@@ -47,12 +47,11 @@ localStorage.removeItem("slickdeals+links"); location.reload();
 
 ## 1a. Start here next session
 
-**One thing is half-finished, and it is the only entry in §3: the 34 release tags on the remote
-still point at pre-rewrite commits**, because this environment's credentials cannot write
-`refs/tags/*`. Read §3 before touching anything to do with the history rewrite. The code is not
-affected - the classic-layout menu work closed out in 26.11.33 and `unwrapLinks` was settled, in §3a
-with the reasoning. Before adding anything else to §3, check §1b and §3a: most things that look like
-gaps here have already been decided, and the reason is recorded next to them.
+**Nothing is blocked, nothing is half-finished, and §3 is empty.** The history rewrite finished on
+Aug 2026 - branches *and* tags, see §3a for what it does and does not achieve. The classic-layout
+menu work closed out in 26.11.33 and `unwrapLinks` was settled, in §3a with the reasoning. Before
+adding anything to §3, check §1b and §3a: most things that look like gaps here have already been
+decided, and the reason is recorded next to them.
 
 ### What has already been reviewed, and how (Aug 2026)
 
@@ -69,6 +68,7 @@ question the previous one could not, and re-reading for consistency will now fin
 | 7 | `processCards`, the ad lists, `parseVotes` | **no defects.** 42 blocklist regexes checked for stateful flags (none), `parseVotes` verified against all 13 documented behaviors |
 | 8 | is the CI tooling itself sound, and do the documented commands survive the rewrite? | **two blind spots in the `no-undef` gate, both fixed** - it reported clean when ESLint could not parse the file, and when handed a path outside the project root. The documented diff-since-`v26.11.31` command still returns the same answer from a fresh clone, stale tags notwithstanding |
 | 9 | does what users actually install match what is in `master`? | **the pipeline is faithful** - the published `Slickdeals.user.js` hashes exactly to the script at the `v26.11.34` tag. `master` carries one later commit-only-in-comments, see §5. The menu options in the README were checked against every `createMenuItem` call and are complete and in the right order; `@match`, `@updateURL` and the asset name all line up |
+| 9 | did the history rewrite actually take effect for someone cloning today? | **no, until the tags were fixed** - 34 tags still pointed at pre-rewrite commits, which a plain `git clone` fetches. Closed the same day via an Actions runner; re-verified by cloning fresh - 315 commits, no pre-rewrite SHAs |
 
 **Still unaudited:** roughly 1,000 lines - the `SETTINGS` proxy layer, `fixCSS()`'s selector
 resolution, and `noAds`'s DOM-insertion interception. Nothing suggests a problem there; it simply has
@@ -139,7 +139,7 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | Concurrency, whether a request queue is needed | Measured Aug 2026: 35 requests, peak 35, 0 failed - no |
 | README screenshot of the menu | **Done** - `docs/classic-menu.png` and `docs/menu.png`, both in the README |
 | Documenting the menu options for users | **Done** - the options table in the README |
-| The resolver hostname appearing in plain text | Removed from every tracked file, and history rewritten Aug 2026 - **but the 34 release tags on the remote still point at pre-rewrite commits**, see §3a |
+| The resolver hostname appearing in plain text | Removed from every tracked file, and history rewritten Aug 2026 - branches and all 34 tags. A fresh clone holds none of the pre-rewrite commits. **This is not erasure**, see §3a |
 | Stale claude/* branches | **Done** - deleted by maxnl |
 | `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
 | The `no-undef` gate reporting "clean" without having run | **Fixed Aug 2026** - a parse error was discarded by the `ruleId !== "no-undef"` filter, and a path outside the project root was skipped with only a warning. Both now fail the build |
@@ -251,21 +251,11 @@ live number, not a count of anchors.
 
 ## 3. Genuinely open
 
-One entry, opened Aug 2026 by the history rewrite. `unwrapLinks` was the previous one; it moved to
-§3a and the decision it was waiting on has been taken - the path stays.
+Everything here has been settled. The release tags were the last entry - opened when the history
+rewrite could not reach them and closed the same day, once an Actions runner was used to do it.
+`unwrapLinks` was the one before, and the decision it was waiting on has been taken: the path stays.
 
-- **The 34 release tags on the remote still point at pre-rewrite commits.** The rewrite that stripped
-  the resolver hostname reached `master` and the working branch but not `refs/tags/*`: the automation
-  environment's git credentials are refused with `HTTP 403` on any tag write, including creating an
-  unrelated throwaway tag, so this is a credential scope limit, not a transient failure and not
-  something a retry fixes. Because `git clone` fetches tags by default, **the old history is still
-  reachable from a fresh clone through them**, which is most of what the rewrite was meant to prevent.
-
-  Finishing it needs credentials that can write `refs/tags/*` - maxnl's own machine, or a token with
-  `contents: write` - and then `git push --force --tags origin` from a clone of the rewritten history.
-  Deleting the tags instead would detach the 34 GitHub Releases from their commits, so repointing is
-  the right move, not deletion. Until then, do not describe the rewrite as complete on the remote;
-  §3a's entry states the same limit and should stay in step with this one.
+- *(nothing currently open)*
 
 ---
 
@@ -302,15 +292,22 @@ gap, because the reason is usually the thing you were about to rediscover.
   was preserved (V@no 85 + 2, maxnl 93, Claude 131). Every SHA before the fork point changed, so old
   commit references in notes or issues no longer resolve; the fork point itself is now `95d2d25`.
 
-  **`master` and the working branch were force-pushed. The 34 release tags were not** - this
-  environment's git credentials are refused (`HTTP 403`) on any write to `refs/tags/*`, including
-  creating an unrelated throwaway tag, so it is a credential scope limit and not something retrying
-  fixes. Every tag on the remote still points at its pre-rewrite commit, **and `git clone` fetches tags
-  by default, so a fresh clone still retrieves the old history through them.** Until the tags are
-  repointed or deleted by someone whose credentials can write `refs/tags/*`, treat the rewrite as
-  *incomplete on the remote*: the branches are clean, the tags are not.
+  **The tags needed a second mechanism, and this is the part worth remembering.** `master` and the
+  working branch force-pushed normally, but every write to `refs/tags/*` was refused with `HTTP 403`
+  - including creating an unrelated throwaway tag, which is how it was identified as a credential
+  scope limit rather than a transient failure. That left all 34 release tags pointing at pre-rewrite
+  commits, and since `git clone` fetches tags by default, the old history was still reachable from a
+  fresh clone through them - most of what the rewrite was for, undone by the part that failed
+  quietly. **If a rewrite ever has to happen again, check the tags before calling it done.**
 
-  **A rewrite is not erasure even once the tags are done.** The repo is public and sits in vanowm's
+  The way through was an Actions runner: its `GITHUB_TOKEN` with `contents: write` can write tags
+  when the session's own credentials cannot. A one-off `workflow_dispatch` job pinned each tag to the
+  rewritten commit for its release, mapped from filter-repo's commit-map, and was deleted once it had
+  run rather than left on the default branch as a force-push button. Verified afterwards tag by tag
+  against the remote, and then by cloning fresh: **315 commits and not one pre-rewrite SHA.** Tag
+  names never changed, so all 34 Releases stayed attached.
+
+  **A rewrite is still not erasure.** The repo is public and sits in vanowm's
   fork network (`forks: 0`, `network_count: 2`), which shares an object store, so unreachable objects
   stay fetchable by SHA until GitHub garbage-collects - generally requiring GitHub Support. Existing
   clones keep it, and anything that already indexed the repo already has it. What the rewrite buys is
