@@ -876,6 +876,18 @@ of them is a layout the script is silently inert on.
   accounted in UTF-16 code units, so ~2.0MB at the 5000 cap and ~0.22MB at the 566 seen in
   practice, against a typical 5MB origin quota shared with the settings blob and slickdeals.net's
   own storage. The earlier 100-150 character estimate was low.
+- **The cache-key contract is held by `crc32`, not by the `0 +` that looks like it.** `getCacheKey()`
+  must return a key starting with a digit: `SETTINGS` treats `/^\d/` as "this is a link-cache entry",
+  and the loader **drops every key that fails it**, so a malformed key means the entry silently
+  vanishes on the next page load and the cache never persists. The guarantee comes from `crc32()`'s
+  `if (what < 0) what = 0xFFFFFFFF + what + 1`, because `~crc` is signed.
+
+  The `0 +` in `return 0 + crc32(...) + "crc"` provides none of it - `crc32()` returns a *number*, so
+  that is numeric addition and prepends nothing. Verified over 200k inputs: byte-identical with and
+  without it, and zero negative results. It dates from the hex-string return still sitting commented
+  out at the foot of `crc32()`. **Do not remove the negative adjustment on the strength of the `0 +`
+  looking like a guard**, and do not "tidy" the key construction either - changing how a key is built
+  changes every key, orphaning every cached entry on every install at once.
 - **`URLSearchParams.get()` already percent-decodes.** Do not wrap it in `decodeURIComponent`.
 - **`initMenu()` requires** at least 4 children on its host, a `<header>` ancestor
   (`closest("header")` matches self), and a `data-v-1` dataset key — `fixCSS()` resolves the script's
@@ -936,7 +948,7 @@ because these rows are code-level detail belonging beside the architecture they 
 | No cached destination is re-checked, for any link | **Links are cached exactly as before** - first load resolves and stores, later loads are cache hits with no request. What no longer happens, since 26.11.18, is the plausibility check re-running on the way *out* of the cache. It is unnecessary: everything in the cache was written by current logic, either passing the check when it arrived or coming from an id unique to that link, and legacy entries were dropped once on the way in to 26.11.16. It was also actively harmful - see [issues we hit](#issues-we-hit) for the every-page-load loop it caused. The residual is that a wrong answer, if the service ever gave one to a checked or unique lookup, would persist until the 5000-entry cap evicted it. Symptom: one link resolving somewhere wrong and staying wrong across reloads while its neighbors are fine. Remedy: `localStorage.removeItem("slickdeals+links")`. A TTL would close it properly if it ever bites — one exists for *failures* since 26.11.29 (`RESOLVE_RETRY_AFTER`, one week); extending it to successful destinations would be the fix. |
 | ~~The resolver is asked with unbounded concurrency~~ | **Measured in a browser, and it is fine.** Thread 19049776 on a cold cache at 26.11.31: **35 requests, peak 35 concurrent, 0 failed**. Peak equalling the total confirms the no-queue reading exactly - all 35 went out in one burst - and the service served every one. The "roughly 4 at a time" figure came from separate curl connections; a browser multiplexes over one HTTP/2 connection and does not trip it. **No queue is needed, and none should be added without a fresh measurement showing failures.** The command is in `MAINTAINING.md` §1a. |
 | ~~`fixCSS()` and `highlightCards()` could be killed by one bad CSS selector~~ | **Guarded in 26.11.31.** `fixCSS()` wraps its `querySelector` in a try/catch returning the selector unresolved; `highlightCards()` has the `\|\| []` that `processLinks()` always had. Neither could fire - 44 of 44 rules parse and both selector lists are literals - but both failed totally and silently. |
-| `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`, so an observed 566-entry cache drained in 12 rounds. Deep but not reachable in practice. |
+| `settingsSave` recursion up to 10,000 | Bounded, and batches grow as `attempt²`. An observed 566-entry cache drains in 12 rounds; a **full 5000-entry cache drains in 25**, so the cap sits 400x above anything reachable. Verified by computing the series, not estimated. |
 
 ---
 
