@@ -15,7 +15,26 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v4 targets Node 20, which went end-of-life in Mar 2026; the runner was
+      # already force-running it on Node 24 and warning about it. v7 targets
+      # node24 natively. Nothing here passes inputs to checkout, and the
+      # defaults this job relies on - fetch-depth 1, persist-credentials - are
+      # unchanged across v5/v6/v7, so the bump is a straight swap.
+      - uses: actions/checkout@v7
+
+      # Pin the Node that runs the gates instead of taking whatever the runner
+      # happens to ship. It matters here: undef-check.mjs pins ESLint to
+      # ecmaVersion 2023 while `node --check` accepts whatever the runtime does,
+      # so an unpinned runtime makes the gap between those two gates drift
+      # silently. 24 is Active LTS (Krypton).
+      #
+      # package-manager-cache is off deliberately - it wants a lockfile to key
+      # the cache on, and this repo has none on purpose: package-lock.json is
+      # gitignored and the step below installs with --no-save.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
 
       - name: Read version and check it is self-consistent
         id: read
