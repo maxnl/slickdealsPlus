@@ -500,6 +500,9 @@ grep -rniE 'colour|behaviour|neighbour|licence|normalis|optimis|defence|recognis
   *.md test/*.md test/*.js 'Slickdeals+.user.js' .github/*.mjs
 ```
 
+**Expect exactly one hit: this command matching its own pattern, in this file.** Anything else is
+real. It was clean at 26.11.34.
+
 **Say what happened, not a dramatic shorthand for it.** The 26.11.19 regression was written up for
 months as "the color collapse", which maxnl objected to and which overstated it - what happened is
 that color variants stopped resolving to their own destinations. Precise beats vivid here.
