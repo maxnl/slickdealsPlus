@@ -56,7 +56,7 @@ gaps here have already been decided, and the reason is recorded next to them.
 
 ### What has already been reviewed, and how (Aug 2026)
 
-Eight review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
+Nine review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
 question the previous one could not, and re-reading for consistency will now find nothing:
 
 | pass | question it asked | outcome |
@@ -68,6 +68,7 @@ question the previous one could not, and re-reading for consistency will now fin
 | 6 | what holds the invariants up? | the cache-key contract rests on `crc32`, not on the `0 +` that looks like it - `FORK-NOTES.md` |
 | 7 | `processCards`, the ad lists, `parseVotes` | **no defects.** 42 blocklist regexes checked for stateful flags (none), `parseVotes` verified against all 13 documented behaviors |
 | 8 | is the CI tooling itself sound, and do the documented commands survive the rewrite? | **two blind spots in the `no-undef` gate, both fixed** - it reported clean when ESLint could not parse the file, and when handed a path outside the project root. The documented diff-since-`v26.11.31` command still returns the same answer from a fresh clone, stale tags notwithstanding |
+| 9 | does what users actually install match what is in `master`? | **the pipeline is faithful** - the published `Slickdeals.user.js` hashes exactly to the script at the `v26.11.34` tag. `master` carries one later commit-only-in-comments, see §5. The menu options in the README were checked against every `createMenuItem` call and are complete and in the right order; `@match`, `@updateURL` and the asset name all line up |
 
 **Still unaudited:** roughly 1,000 lines - the `SETTINGS` proxy layer, `fixCSS()`'s selector
 resolution, and `noAds`'s DOM-insertion interception. Nothing suggests a problem there; it simply has
@@ -508,6 +509,18 @@ node test/unit.js && node test/cachekey.js && node test/answers.js && node test/
   the retry and passed for a build whose retry function had been deleted. Everything in `test/`
   extracts from the file at run time; keep it that way.
 - The release workflow runs only on push to `master`, so a PR shows no checks. That is expected.
+- **`master` can legitimately be ahead of the published release, and currently is.** The workflow
+  no-ops when a release for the current `@version` already exists, so anything landing without a
+  version bump is not published and waits for the next one. As of Aug 2026 that is `0a5d554`, which
+  is **comments only** - verified by stripping comment lines from both and comparing, 89015
+  characters each, identical. The published `Slickdeals.user.js` hashes to the script at the
+  `v26.11.34` tag exactly, so the pipeline is faithful; the gap is the bump, not the build. Check it
+  the same way before concluding users are running different code:
+
+  ```sh
+  git show v26.11.34:'Slickdeals+.user.js' | sha256sum   # compare to the release asset's digest
+  git diff v26.11.34..master -- 'Slickdeals+.user.js'
+  ```
 - **Whether a mechanism works can be measured with `curl`. Where a link goes cannot.** A curl fetch
   gets a different `u3` than a real session. That confusion has produced wrong conclusions here at
   least four times, including two retracted claims about Timex.
