@@ -4,7 +4,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      26.11.33
+// @version      26.11.34
 // @license      MIT
 // @homepageURL  https://github.com/maxnl/slickdealsPlus
 // @supportURL   https://github.com/maxnl/slickdealsPlus/issues
@@ -20,7 +20,7 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "26.11.33";
+const VERSION = "26.11.34";
 /* Display only, deliberately kept out of VERSION.
  *
  * VERSION is not just a label: resolveUrl() sends it as a path segment to the
@@ -34,11 +34,8 @@ const VERSION = "26.11.33";
  * the link cache are keyed by the literals in LocalStorageName, not by script
  * identity, so renaming the script cannot orphan them. */
 const FORK = "maxnl fork";
-const CHANGES = `! clicking Changes no longer closes the menu on the classic layout
-! the Changes label is visible when collapsed, so the changelog can be found
-! "more" now sits below the changelog instead of beside it
-* the changelog panel sizes itself to the space actually below the bar
-* comment entries are legible on the light panel`;
+const CHANGES = `! guards the last two places where a missing element could stop the script
+# found by auditing the runtime paths rather than by anything failing`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -1655,8 +1652,20 @@ const setColors = (ids =>
 			for(let i = 0; i < ids.length; i++)
 			{
 				const id = ids[i];
+				/* 26.11.31 guarded fixCSS() and highlightCards() against $$ returning
+				 * nothing; this is the third site of that class and was missed. It is
+				 * the most reachable of the three: those two pass string literals that
+				 * always parse, while this passes an element id, so $$ hands back
+				 * getElementById()'s null whenever the input is not in the document -
+				 * and update() also runs from a deferred readystatechange listener, by
+				 * which time the menu can have been removed (the MutationObserver has a
+				 * branch that reattaches it, so removal does happen). A throw here
+				 * escapes into whatever invoked initMenu, which on the Blueprint path
+				 * is a MutationObserver callback, abandoning the rest of that batch. */
 				//only trusted reset event triggers the reset, otherwise it simply updates the color
-				$$(id).dispatchEvent(new Event("reset"));
+				const elInput = $$(id);
+				if (elInput)
+					elInput.dispatchEvent(new Event("reset"));
 			}
 		},
 	});
@@ -2408,7 +2417,9 @@ const updateLinks = () =>
 {
 	if (SETTINGS.resolveLinks)
 	{
-		const nlList = $$(".notResolved", document.body, true);
+		/* || [] for the same reason as processLinks() and highlightCards(): $$
+		 * swallows a failure and returns undefined, and .length on that throws. */
+		const nlList = $$(".notResolved", document.body, true) || [];
 		if (nlList.length > 0)
 			processLinks(nlList, true);
 	}

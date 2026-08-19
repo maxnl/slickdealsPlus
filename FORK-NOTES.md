@@ -6,7 +6,7 @@ Working reference for [maxnl/slickdealsPlus](https://github.com/maxnl/slickdeals
 | | |
 |---|---|
 | Forked from | `b2c6ac8`, 2025-07-19, upstream **v25.7.18** |
-| Current | **v26.11.33** |
+| Current | **v26.11.34** |
 | Diff since fork | `git diff --numstat b2c6ac8 HEAD -- 'Slickdeals+.user.js'` — about +1600 / −75 at 26.11.33 |
 | Files added | `.gitignore`, `.github/workflows/release.yml`, `.github/undef-check.mjs`, `MAINTAINING.md`, this file, `docs/` (2 screenshots), `test/` (5 harnesses + README) |
 | Files deleted | `CNAME`, `CHANGES.html` |
@@ -92,6 +92,7 @@ Earlier versions are reconstructed from the file at each merge.
 | 26.11.31 | — | Guards the two latent CSS traps - no behavior change |
 | 26.11.32 | [#70](https://github.com/maxnl/slickdealsPlus/pull/70) | **The changelog wrapped to one word per line on the classic layout** - page CSS pinned the entries to 1em |
 | 26.11.33 | [#71](https://github.com/maxnl/slickdealsPlus/pull/71) | **Clicking Changes closed the menu instead of opening the changelog**, plus the label, `more`, the panel height and washed-out comment entries |
+| 26.11.34 | — | Guards the two remaining `$$` dereferences - `setColors.update()` and `updateLinks()` - found by audit, not by a failure |
 
 ---
 
