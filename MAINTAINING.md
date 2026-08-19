@@ -56,7 +56,7 @@ gaps here have already been decided, and the reason is recorded next to them.
 
 ### What has already been reviewed, and how (Aug 2026)
 
-Seven review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
+Eight review passes ran over this repo. **Do not repeat them from scratch** - each had to ask a
 question the previous one could not, and re-reading for consistency will now find nothing:
 
 | pass | question it asked | outcome |
@@ -67,6 +67,7 @@ question the previous one could not, and re-reading for consistency will now fin
 | 5 | does the code actually work? | four `$$` dereference sites, two unguarded - fixed in 26.11.34 |
 | 6 | what holds the invariants up? | the cache-key contract rests on `crc32`, not on the `0 +` that looks like it - `FORK-NOTES.md` |
 | 7 | `processCards`, the ad lists, `parseVotes` | **no defects.** 42 blocklist regexes checked for stateful flags (none), `parseVotes` verified against all 13 documented behaviors |
+| 8 | is the CI tooling itself sound, and do the documented commands survive the rewrite? | **two blind spots in the `no-undef` gate, both fixed** - it reported clean when ESLint could not parse the file, and when handed a path outside the project root. The documented diff-since-`v26.11.31` command still returns the same answer from a fresh clone, stale tags notwithstanding |
 
 **Still unaudited:** roughly 1,000 lines - the `SETTINGS` proxy layer, `fixCSS()`'s selector
 resolution, and `noAds`'s DOM-insertion interception. Nothing suggests a problem there; it simply has
@@ -140,6 +141,7 @@ shipped" and "26.11.31 confirmed" as one fact, the other as two. They are two.
 | The resolver hostname appearing in plain text | Removed from every tracked file, and history rewritten Aug 2026 - **but the 34 release tags on the remote still point at pre-rewrite commits**, see §3a |
 | Stale claude/* branches | **Done** - deleted by maxnl |
 | `node_modules` committed to the repo | **Fixed Aug 2026** - untracked, and `.gitignore` added. See below on why history is left alone |
+| The `no-undef` gate reporting "clean" without having run | **Fixed Aug 2026** - a parse error was discarded by the `ruleId !== "no-undef"` filter, and a path outside the project root was skipped with only a warning. Both now fail the build |
 
 The same applies to `FORK-NOTES.md`: its *Known characteristics and accepted limitations* table keeps
 finished rows struck through for the history. Struck through means finished, and nothing in that
