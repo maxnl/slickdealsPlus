@@ -182,6 +182,25 @@ their own ASINs, the rei.com post link, both Timex links, the wiki block, and th
 | 26.11.32 | Aug 2026 | maxnl | changelog width fix, classic layout — entry went 29px to 240px, wraps normally |
 | 26.11.33 | Aug 2026 | maxnl | Changes toggles and the menu stays open; label visible collapsed; more below the text; panel fits |
 
+**Does a release need re-testing against the full set? Check, do not guess.** Everything shipped
+after 26.11.31 - 26.11.32, .33 and .34 - is menu, CSS and guards; **link resolution is untouched**.
+Verified by extracting the thirteen resolver-path functions from both versions and comparing them
+with comments stripped: twelve are byte-identical to the build maxnl tested, and the thirteenth,
+`updateLinks()`, differs only by an `|| []` that cannot substitute, because its selector is a literal
+that `querySelectorAll` will never reject. So the 26.11.31 row still covers the current build for
+link resolution.
+
+Do the same before asking for a re-test, rather than inferring from the changelog:
+
+```sh
+git diff v26.11.31..HEAD -- 'Slickdeals+.user.js' | grep '^[+-]' | grep -vE '^[+-]\s*(\*|//|/\*)'
+```
+
+If nothing in `getUrlId`, `getCacheKey`, `crc32`, `isDestinationPlausible`, `decodeResolved`,
+`resolveFinalHop`, `askFor`, `resolveUrl`, `processLinks` or `linkUpdate` moved, the full set does not
+need running again. **A menu or CSS change is a different question** and needs its own confirmation -
+see §5.
+
 **26.11.34 is deliberately not in this table.** It adds two defensive guards and changes nothing
 unless one fires, so there is no observable behavior for a browser to confirm - only that nothing
 regressed. Absence here means unverifiable, not unverified; it is recorded as done in §1b.
