@@ -19,7 +19,7 @@ every regression in this repo came from changing the code without reading the hi
 
 ## 1. Where things stand
 
-Released and current: **v26.11.33**. Confirmation status lives in §1c and is appended to, never
+Released and current: **v26.11.34**. Confirmation status lives in §1c and is appended to, never
 rewritten - see the note there for why.
 
 | version | state |
@@ -33,7 +33,8 @@ rewritten - see the note there for why.
 | 26.11.30 | good, superseded - removes a branch 26.11.28 stranded, and its orphaned helper |
 | 26.11.31 | good, superseded - guards the two latent CSS traps; no behavior change |
 | 26.11.32 | good, superseded - the changelog no longer wraps to one word per line |
-| 26.11.33 | **current** - the Changes toggle works on the classic layout, and four faults around it |
+| 26.11.33 | good, superseded - the Changes toggle works on the classic layout, and four faults around it |
+| 26.11.34 | **current** - guards the last two `$$` dereferences; no behavior change unless one fires |
 
 **Anyone upgrading from 26.11.26 should clear the link cache** - a link rejected under the old rule
 is remembered as failed for a week:
@@ -337,10 +338,30 @@ whose fallback also reaches the wrong host, is remembered. So a rate-limited lin
 keeps its own href, and is asked again on the next page load — no timer, no in-page queue, no
 week-long marker.
 
-**Both latent traps are now guarded** (26.11.31). `fixCSS()` wraps its `querySelector` in a
-try/catch returning the selector unresolved, and `highlightCards()` has the `|| []` that
-`processLinks()` always had. Neither could fire before - 44 of 44 CSS rules parse, and both selector
-lists are string literals - but both failures were total and silent, and the guards are two lines.
+**The `$$` traps: four sites, guarded across 26.11.31 and 26.11.34.** `$$()` ends in a bare `catch {}`
+and so returns `undefined` on any failure, and for a bare-word argument it returns
+`getElementById()`'s `null`. Every caller that dereferences the result without a guard is a total,
+silent stop.
+
+26.11.31 guarded two: `fixCSS()` wraps its `querySelector` in a try/catch returning the selector
+unresolved, and `highlightCards()` gained the `|| []` that `processLinks()` always had. Neither could
+fire - 44 of 44 CSS rules parse and both selector lists are string literals.
+
+**26.11.34 guarded the two that pass had missed**, found by auditing the runtime paths rather than by
+anything failing:
+
+- `setColors.update()` did `$$(id).dispatchEvent(...)` on an element **id**, so `$$` hands back a
+  plain `null` whenever that input is not in the document - no unparseable selector needed. This is
+  the most reachable of the four: `update()` also runs from a deferred `readystatechange` listener,
+  and the menu can be gone by then (the MutationObserver carries a branch that reattaches it, so
+  removal does happen). A throw escapes into whatever invoked `initMenu()`, which on the Blueprint
+  path is a MutationObserver callback - abandoning the rest of that batch.
+- `updateLinks()` read `.length` off an unguarded `$$` result. Unreachable today for the same reason
+  the 26.11.31 pair were - the selector is a literal - but identical in shape.
+
+The lesson generalises past `$$`: **a helper that swallows failure into `undefined` makes every
+unguarded call site a defect**, and finding them means enumerating call sites, not reading the helper.
+`grep -n '\$\$(' Slickdeals+.user.js` lists them; four of eleven needed a guard.
 
 **The one risk worth knowing, from 26.11.29.** A "no destination" answer is now remembered for a
 week. Network errors and non-OK responses throw *before* that branch, so they are not cached - but if
